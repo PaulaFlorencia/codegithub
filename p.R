@@ -1,4 +1,3 @@
-# Test Comment
 ###################### Exemples ###############################
 library(evd)
 # RNG
@@ -19,7 +18,7 @@ p12_theo <- 1 / (1 + theta_theo)
 
 #############################################################################
 
-p12_NonPar <- function(X,Z,t,h,m=512){
+p12_NonPar <- function(X,Z,t,h,m=512, k=dnorm){
   
   # Compute empirical cdf of NAT
   G_emp <- ecdf(X)
@@ -32,8 +31,8 @@ p12_NonPar <- function(X,Z,t,h,m=512){
   
   # Numerator Kt
   const <- sqrt(2 * pi) * h * length(x)
-  Kt <- sapply(t, function(tj) sum(exp(-(t_eval - tj)^2 / (2 * h^2))) / const)
-
+  Kt <- sapply(t, function(tj) k((t_eval - tj)/h))
+  
   # Ponderation
   W <- Kt / rowSums(Kt)
   
