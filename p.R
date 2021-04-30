@@ -3,7 +3,7 @@ library(evd)
 # RNG
 set.seed(1)
 
-# Example 1
+############# Example 1
 # Gumbel
 
 # Simulations
@@ -16,8 +16,7 @@ Z = rgev(size, loc = mu, scale = 1, shape = 0)
 theta_theo <- 1 / exp(mu)
 p12_theo <- 1 / (1 + theta_theo)
 
-##########################################################################
-# Example 2
+############ Example 2
 # Frechet
 # Simulations
 size <-  250 * 4
@@ -32,31 +31,34 @@ p12_theo <- 1 / (1 + theta_theo)
 G_theo <- function(z) pgev(z, loc = 1, scale = xi, shape = xi)
 far_theo_rp <- (1 - theta_theo) * (1 - 1/rp)
 
-#############################################################################
+#########################  Kernels exemples ##########################################
 # Epanechnikov density distribution
-depan <- function(x){d <- (3 / 4) * (1 - x^2)}
+dEpan <- function(x){
+  tt <- rep(0, length(x))
+  tt[x>=-1 & x<=1] <- (3/4)* (1-x^2)
+  return(tt)
+}
 
-##########################################
-p12_NonPar <- function(X,Z,t,h,m=512, k=dnorm){
-  
-  # Compute empirical cdf of NAT
+Kern_gauss <- function(x)exp(-x^2/2)
+
+###################### p12 Non parametric computation ################
+p12_NonPar <- function(X,Z,t,h,m=1000,kern= Kern_gauss){
+  # G_Z computation
   G_emp <- ecdf(X)
   G_Z <- G_emp(Z)
-  
-  # evaluation vector
+  # Evaluation vector computation
   rg <- range(t)
   t_eval <- seq(rg[1] - 3 * h, rg[2] + 3 * h, length.out = m)
-  kt <- numeric(m)
-  
-  # Numerator Kt
-  const <- sqrt(2 * pi) * h * length(t)
-  Kt <- sapply(t, function(tj) k((t_eval - tj)/h))
-  
-  # Ponderation
-  W <- Kt / rowSums(Kt)
-  
-  p12 <- W %*% G_Z
-  
-  drop(p12)
-  
+  # W computation
+  Kij <- outer(t_eval,t,function(zz,z) kern((zz - z) / h))
+  W <- Kij / rowSums(Kij)
+  # p12_hat computation
+  p12_hat <- W %*% G_Z
 }
+
+##### Plot:
+
+p12_hat <- p12_outer(X,Z,t,0.2)
+plot(p12_theo, type = "l", lwd = 4, xlab = "x", ylab = "p12")
+lines(p12_hat, col = "red", lwd = 2)
+
