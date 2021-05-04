@@ -70,3 +70,42 @@ p12_NonPar <- function(X,Z,t,t_eval,h,kern= dEpan){
 p12_hat <- p12_NonPar(X_gev,Z_gev_trend,t,t,0.2,)
 plot(t,p12_theo, type = "l", lwd = 4, xlab = "t", ylab = "p12")
 lines(t,p12_hat, col = "red", lwd = 2)
+
+
+######################### Computation of IC ###################################
+
+# Computation of variance
+G_emp <- ecdf(X)
+G_Z <- G_emp(Z)
+
+VarA <- size # or just size
+t <- seq.int(size)/size
+t_eval <- seq.int(size)/size
+
+Khj <- outer(t_eval, t, function(zz,z) dEpan((zz - z) / 0.2))
+Khi <- outer(t_eval, t, function(zz,z) dEpan((zz - z) / 0.2))
+E <- mean(outer(G_Z,G_Z, pmin) - outer(G_Z,G_Z,"*"))
+
+VarB_num <- as.numeric(rowSums(Khj) %*% rowSums(Khi))
+VarB_denom <- length(t)*(rowSums(Khj))^2
+VarB <- VarB_num*E/VarB_denom
+
+sigma_m <- VarA + VarB
+
+# Computation CI
+s <- (sigma_m)^1/2
+error <- qnorm(0.975)*s/sqrt(size)
+left <- p12_hat-error
+right <- p12_hat+error
+
+left_ex <-p12_hat-0.05 #test pour voir si le plot marche bien
+right_ex<-p12_hat+0.05
+
+##### plot p12_hat with CI
+library(ggplot2)
+df <-data.frame(x=t,y=p12_hat,z1=left, z2=right)
+p12plot<-ggplot(df,aes(x=t,y=p12_hat)) + geom_line()
+p12plot <- p12plot + geom_ribbon(aes(ymin=left_ex, ymax=right_ex), linetype=2, alpha=0.1)
+p12plot
+
+dev.off()
