@@ -4,7 +4,7 @@ library(evd)
 #set.seed(1)
 set.seed(Sys.time())
 
-# Easy distributions
+# Easy visualisation distributions
 size <- 20
 t <- seq.int(size)
 mu = seq(0, 5, length.out = size) 
@@ -44,9 +44,6 @@ p12_theo <- 1 / (1 + theta_theo)
 G_theo <- function(z) pgev(z, loc = 1, scale = xi, shape = xi)
 far_theo_rp <- (1 - theta_theo) * (1 - 1/rp)
 
-######### R.V from a random distribution 
-
-
 #########################  Kernels exemples ##########################################
 # Epanechnikov density distribution
 dEpan <- function(x){
@@ -70,32 +67,15 @@ p12_NonPar <- function(X,Z,t,t_eval,h,kern= dEpan){
   p12_hat <- W %*% G_Z
 }
 
-# plot p12_theo & p12_hat
-p12_hat <- p12_NonPar(x,z,t,t,0.2,)
-plot(t,p12_theo, type = "l", lwd = 4, xlab = "t", ylab = "p12")
-lines(t,p12_hat, col = "red", lwd = 2)
-
-
-######################### Computation of IC ###################################
-
-t <- seq.int(size)/size
-t_eval <- seq.int(size)/size
-
-G_emp <- ecdf(X)
-G_Z <- G_emp(Z)
-
-######## Var(A) and Var(B):
-
+################################### Computation of IC ################################
 dEpan_2<- function(x){
   tt <- ((3/4)* (1-x^2))^2
   tt[-1>x] <- 0
   tt[x>1] <- 0
   return (tt)
 }
-# integral of squared kernel
-K22<-integrate(dEpan_2,-1,1)$value
 
-kern_dens <- function(t,teval,h,kern=dEpan) {
+kern_dens <- function(t,t_eval,h,kern=dEpan) {
   fh <- numeric(length(t_eval))
   for (i in seq_along(t))
     for (j in seq_along(t_eval))
@@ -103,38 +83,66 @@ kern_dens <- function(t,teval,h,kern=dEpan) {
     fh <- fh / ( h * length(t))
     return(fh)
 }
-# density distribution of t 
-f_t<-kern_dens(t,t,0.2)
-# variance of t 
-sigma_t <- var(t)
 
-# Var(A):
-VarA <- (sigma_t * K22 * f_t )^0.5
+IC <- function(X,Z,t,t_eval,h,kern=dEpan) {
+  # computation of G_Z
+  G_emp <- ecdf(X)
+  G_Z <- G_emp(Z)
+  # integral of squared kernel
+  K22<-integrate(dEpan_2,-1,1)$value
+  # density distribution of t 
+  f_t<-kern_dens(t,t,h)
+  # variance of t 
+  sigma_t <- var(t)
+  # Var(A):
+  VarA <- (sigma_t * K22 * f_t )^0.5
+  # Var(B):
+  Khj <- outer(t_eval, t, function(zz,z) dEpan((zz - z) / h))
+  Khi <- outer(t_eval, t, function(zz,z) dEpan((zz - z) / h))
+  E <- mean(outer(G_Z,G_Z, pmin) - outer(G_Z,G_Z,"*"))
+  VarB_num <- as.numeric(rowSums(Khj) %*% rowSums(Khi))
+  VarB_denom <- length(t)*(rowSums(Khj))^2
+  VarB <- VarB_num*E/VarB_denom
+  # sigma = Var(A)+ Var(B)
+  sigma_m <- VarA + VarB
+  #Computation of p12_hat
+  p12_hat<-p12_NonPar(X,Z,t,t_eval,h,kern)
+  # Computation of CI
+  s <- (sigma_m)^1/2
+  error <- qnorm(0.975)*s/sqrt(length(t))#length of t or of G_Z?
+  left <- p12_hat-error
+  right <- p12_hat+error
+  return(list(low=left,high=right))
+}
 
-# Var(B):
-Khj <- outer(t_eval, t, function(zz,z) dEpan((zz - z) / 0.2))
-Khi <- outer(t_eval, t, function(zz,z) dEpan((zz - z) / 0.2))
-E <- mean(outer(G_Z,G_Z, pmin) - outer(G_Z,G_Z,"*"))
-
-VarB_num <- as.numeric(rowSums(Khj) %*% rowSums(Khi))
-VarB_denom <- length(t)*(rowSums(Khj))^2
-VarB <- VarB_num*E/VarB_denom
-
-sigma_m <- VarA + VarB
-
-# Computation CI
-s <- (sigma_m)^1/2
-error <- qnorm(0.975)*s/sqrt(size)
-left <- p12_hat-error
-right <- p12_hat+error
-
-##### plot p12_hat with CI
+##### Computation and plot of p12_hat and CI
 library(ggplot2)
-df <-data.frame(x=t,y=p12_hat,z1=left, z2=right,theo=p12_theo)
+p12_hat<-p12_NonPar(X,Z,t,t,0.2)
+ic<-IC(x,z,t,t,0.2) 
+df <-data.frame(x=t,y=p12_hat,z1=ic$low, z2=ic$high,theo=p12_theo)
 p12plot<-ggplot(df,aes(x=t,y=p12_hat)) + geom_line(colour="red") 
 p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
-p12plot <- p12plot + geom_ribbon(aes(ymin=left, ymax=right), linetype=2, alpha=0.1) 
+p12plot <- p12plot + geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) 
 p12plot <- p12plot + ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
 p12plot
 
 dev.off()
+
+################## Distributions with randon loction parameter ###############################
+# distributions
+ui<-rnorm(2);bi<-rnorm(2,mean=1,sd=0.1)
+X1<-rgev(size, loc=ui[1], scale=1, shape=0); X2<-rgev(size, loc=ui[2], scale=1, shape=0)
+Z1<-rgev(size, loc = ui[1]+bi[1]*t, scale = 1, shape = 0); Z2<-rgev(size, loc = ui[2]+bi[2]*t, scale = 1, shape = 0)
+# p12 computaion
+p12_1<-p12_NonPar(X1,Z1,t,t,0.2); p12_2<-p12_NonPar(X2,Z2,t,t,0.2);ic_1<-IC(X1,Z1,t,t,0.2) ;ic_2<-IC(X1,Z1,t,t,0.2) 
+#plot
+df_Ex <-data.frame(temp=t,x=p12_1,y=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
+p12plot<-ggplot(df_Ex,aes(x=t,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
+  geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1)
+p12plot
+
+dev.off()
+
+
+
+
