@@ -171,27 +171,35 @@ hchoix_f
 ##### Optimal bandwith computation
 
 # Oomputation of vector of errors
-n <- size 
-G_emp <- ecdf(X)
-G_Z <- G_emp(Z)
-h_seq<-seq(from=0.01, to=1,by=0.02)
-CV_err_h = rep(NA,length(h_seq))
 
-for(j in 1:length(h_seq)){
-  h_using = h_seq[j]
-  CV_err=rep(NA,n)
-  for(i in 1:n){
-    t_test <- t[i]; Z_test<-Z[i]; GZ_test <-G_Z[i] # validation set
-    t_tr <- t[-i]; Z_tr<-Z[-i]; GZ_tr <-G_Z[-i] # training set
-    GZ_predict <-p12_NonPar(X,Z_tr,t_tr,t,h_using) 
-    CV_err[i]<-(GZ_test - GZ_predict[i])^2
+h_seq<-seq(from=0.01, to=1,by=0.02)
+
+size <-  250 * 4
+tt <- seq.int(size)/size
+t_eval <- seq.int(size)/size
+
+CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
+  n <- length(tt)
+  G_emp <- ecdf(X)
+  G_Z <- G_emp(Z)
+  CV_err_h = rep(NA,length(h_seq))
+  for(j in 1:length(h_seq)){
+    h_using = h_seq[j]
+    CV_err=rep(NA,n)
+    for(i in 1:n){
+      tt_test <- tt[i]; Z_test<-Z[i]; GZ_test <-G_Z[i] # validation set
+      tt_tr <- tt[-i]; Z_tr<-Z[-i] # training set
+      GZ_predict <-p12_NonPar(X,Z_tr,tt_tr,t_eval,h_using) 
+      CV_err[i]<-(GZ_test - GZ_predict[i])^2
+    }
+    CV_err_h[j]<-(mean(CV_err))^0.5
   }
-  CV_err_h[j]<-(mean(CV_err))^0.5
+  return(CV_err_h) #vector of errors
 }
-CV_err_h 
+error_vector<-CV_error(X,Z,tt,t_eval,h_seq,kern= dEpan)
 
 # Error plot 
-plot(x=h_seq, y=CV_err_h, type="b", lwd=3, col="blue",
+plot(x=h_seq, y=error_vector, type="b", lwd=3, col="blue",
      xlab="Smoothing bandwidth", ylab="LOOCV prediction error")
 
 h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]; h_opt # optimal bandwith = 0.11
