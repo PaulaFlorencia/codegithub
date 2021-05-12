@@ -237,8 +237,51 @@ h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]; h_opt # optimal bandwith = 0.1
 opt_err <-min(CV_err_h); opt_err # optimal erreur = 0.03589835
 
 
+
+############################# Add "real" variable Y #################################
+
+size <-  250*4
+tt <- seq.int(size)/size
+# numer of models 
+m <- 2
+# paraters of the models
+ui<-rnorm(m) 
+bi<-rnorm(m,sd=0.1)
+
+# fonction that creates "real" factual run
+Z_real_comp <- function(size=size,tt=tt,scale=1,shape=0) {
+  ui=0; bi=1 # parameters of 
+  Z_real<-rep(0,size)
+  for (i in 1:size/4){
+    Z_real[i]<-Z_real[i]+rgev(1,loc=ui, scale=1, shape=0)
+  }
+  for (i in 251 : size){
+    Z_real[i]<-Z_real[i]+rgev(1,loc=ui+(bi*tt[i]-250)/1000, scale=1, shape=0)
+  }
+  return(Z_real)
+}
+
+# Z_real[i]<-Z_real[i]+rgev(1,loc=ui+(((bi*tt[i]) - 250)/1000), scale=1, shape=0)
+
+# "real" factual(Z) and couterfactual(X) run
+Z_real<-Z_real_comp(size,tt,scale=1,shape=0)
+X_real<-rgev(size, loc=0, scale=1, shape=0) # ui=0 , bi=1
+# run from model 1
+X1<-rgev(size*5, loc=ui[1], scale=1, shape=0)
+Z1<-rgev(size, loc = ui[1]+bi[1]*t, scale = 1, shape = 0)
+# run from model 2
+X2<-rgev(size*5, loc=ui[2], scale=1, shape=0)
+Z2<-rgev(size, loc = ui[2]+bi[2]*t, scale = 1, shape = 0)
+
+# "real" p12 , p12_hat and CI of each model 
+p12_real<-p12_NonPar(X_real,Z_real,tt,tt,0.11); p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
+ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
+# plot
+df_Ex <-data.frame(temp=tt, x=p12_real, y1=p12_1, y2=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
+p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
+  geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12_real, colour="blue")
+p12plot
+
+
 dev.off()
-
-
-
 
