@@ -129,9 +129,9 @@ p12plot
 ################################# Quality of convergence #################################
 
 # Computation of multiple samples (X,Z)
-N <- 1000 
-depx <- NULL; for (i in 1:N){depx <- cbind(depx,rgev(size * 5 , loc = 0, scale = 1, shape = 0))}
-depz <- NULL; for (i in 1:N){depz <- cbind(depz,rgev(size, loc = mu, scale = 1, shape = 0))}
+N <- 3 
+depx <- NULL; for (i in 1:N){depx <- cbind(depx,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+depz <- NULL; for (i in 1:N){depz <- cbind(depz,z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
 
 # Computation of p12_hat_sample for each (Xi,Zi)
 p12_hat_samples <- matrix(0,size,N); ic_samples_high <- matrix(0,size,N); ic_samples_low <- matrix(0,size,N)
@@ -157,7 +157,7 @@ p12_error <- abs(p12_theo - p12_hat_moyen)
 plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
 
 # Incertitude of estimation
-ic_error <- abs(ic_samples_high - p12_hat_moyen)
+ic_error <- abs(ic_samples_high - p12_hat_moyen) # I DONT UNDERSTAND WHY
 plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
 
 ################## Distributions with randon loction parameter ###############################
