@@ -19,7 +19,7 @@ Z_norm = rnorm(size,0.4,2)
 # Gumbel - (set.seed(292))
 
 # Simulations
-size <-  1000
+size <-  250*4
 rp <- 50
 tt <- seq.int(size)/size
 mu = 2 + seq(0, 5, length.out = size) 
@@ -79,7 +79,7 @@ kern_dens <- function(tt,t_eval,h,kern=dEpan) {
   fh <- numeric(length(t_eval))
   for (i in seq_along(tt))
     for (j in seq_along(t_eval))
-      fh[i] <- fh[i] + kern((t_eval[i] - t[j])/h) 
+      fh[i] <- fh[i] + kern((t_eval[i] - tt[j])/h) 
     fh <- fh / ( h * length(tt))
     return(fh)
 }
@@ -115,10 +115,10 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
   return(list(low=left,high=right))
 }
 
-##### Computation and plot of p12_hat and CI
+##### Computation and plot of p12_hat and CI for 1 couple (X,Z)
 library(ggplot2)
-p12_hat<-p12_NonPar(X,Z,tt,tt,1)
-ic<-IC(X,Z,tt,t,1) 
+p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
+ic<-IC(X,Z,tt,tt,0.11) 
 df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,theo=p12_theo)
 p12plot<-ggplot(df,aes(x=tt,y=p12_hat)) + geom_line(colour="red") 
 p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
@@ -126,7 +126,39 @@ p12plot <- p12plot + geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alp
 p12plot <- p12plot + ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
 p12plot
 
-dev.off()
+################################# Quality of convergence #################################
+
+# Computation of multiple samples (X,Z)
+N <- 1000 
+depx <- NULL; for (i in 1:N){depx <- cbind(depx,rgev(size * 5 , loc = 0, scale = 1, shape = 0))}
+depz <- NULL; for (i in 1:N){depz <- cbind(depz,rgev(size, loc = mu, scale = 1, shape = 0))}
+
+# Computation of p12_hat_sample for each (Xi,Zi)
+p12_hat_samples <- matrix(0,size,N); ic_samples_high <- matrix(0,size,N); ic_samples_low <- matrix(0,size,N)
+for (i in 1:N){
+  p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(depx[,i],depz[,i],tt,tt,0.11)
+  ic_samples_high[,i] <- ic_samples_high[,i] + as.vector(IC(depx[,i],depz[,i],tt,tt,0.11)$high)
+  ic_samples_low[,i] <- ic_samples_low[,i] + as.vector(IC(depx[,i],depz[,i],tt,tt,0.11)$low)
+}
+
+# Computation on average for big N
+p12_hat_moyen <- rowMeans(p12_hat_samples); ic_samples_high <- rowMeans(ic_samples_high); ic_samples_low <-rowMeans(ic_samples_low)
+
+# Plot
+df <-data.frame(x=tt,y=p12_hat_moyen,z1=ic_samples_low , z2=ic_samples_high ,theo=p12_theo)
+p12plot<-ggplot(df,aes(x=tt,y=p12_hat_moyen)) + geom_line(colour="red") 
+p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
+p12plot <- p12plot + geom_ribbon(aes(ymin=ic_samples_low, ymax=ic_samples_high), linetype=2, alpha=0.1) 
+p12plot <- p12plot + ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
+p12plot
+
+# Error between p12_theo and p12_hat
+p12_error <- abs(p12_theo - p12_hat_moyen)
+plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
+
+# Incertitude of estimation
+ic_error <- abs(ic_samples_high - p12_hat_moyen)
+plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
 
 ################## Distributions with randon loction parameter ###############################
 # distributions
@@ -140,7 +172,6 @@ df_Ex <-data.frame(temp=tt,x=p12_1,y=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,
 p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
   geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1)
 p12plot
-
 
 ############################### Bandwith selection #################################
 
@@ -170,7 +201,7 @@ hchoix_f
 
 ##### Optimal bandwith computation
 
-# Oomputation of vector of errors
+# Computation of vector of errors
 
 h_seq<-seq(from=0.01, to=1,by=0.02)
 
