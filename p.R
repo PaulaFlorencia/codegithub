@@ -162,27 +162,20 @@ ic_error <- ic_samples_high - ic_samples_low
 plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
 
 # max error evolution within N
-
-Nn=3
+Nn=100
 max_error_evolution <- rep(0,Nn)
 for (j in 1:Nn) {
   samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
   samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
-  p12_hat_samples <- matrix(0,size,N)
-  for (i in 1:N){
+  p12_hat_samples <- matrix(0,size,j)
+  for (i in 1:j){
     p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
   }
   p12_hat_moyen <- rowMeans(p12_hat_samples)
-  p12_error <- abs(p12_theo - p12_hat_moyen)
+  p12_error <- abs(p12_theo - p12_hat_moyen[j])
   max_error_evolution[j] <- max(p12_error)
 }
-return(max_error_evolution)
-
-#CV_err[i]<-(GZ_test - GZ_predict[i])^2
-#}
-#CV_err_h[j]<-(mean(CV_err))^0.5
-#}
-#return(CV_err_h) #vector of errors
+plot(1:Nn,max_error_evolution)
 
 ################## Distributions with randon loction parameter ###############################
 # distributions
