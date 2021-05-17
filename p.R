@@ -29,8 +29,8 @@ theta_theo <- 1 / exp(mu)
 p12_theo <- 1 / (1 + theta_theo)
 
 ############ Example 2
-# Frechet - 
-set.seed(304)
+# Frechet - set.seed(304)
+
 # Simulations
 size <-  250 * 4
 rp <- 50
@@ -129,22 +129,23 @@ p12plot
 ################################# Quality of convergence #################################
 
 # Computation of multiple samples (X,Z)
-N <- 3 
-depx <- NULL; for (i in 1:N){depx <- cbind(depx,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
-depz <- NULL; for (i in 1:N){depz <- cbind(depz,z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+N <- 10
+samplex <- NULL; for (i in 1:N){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+samplez <- NULL; for (i in 1:N){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
 
 # Computation of p12_hat_sample for each (Xi,Zi)
 p12_hat_samples <- matrix(0,size,N); ic_samples_high <- matrix(0,size,N); ic_samples_low <- matrix(0,size,N)
 for (i in 1:N){
-  p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(depx[,i],depz[,i],tt,tt,0.11)
-  ic_samples_high[,i] <- ic_samples_high[,i] + as.vector(IC(depx[,i],depz[,i],tt,tt,0.11)$high)
-  ic_samples_low[,i] <- ic_samples_low[,i] + as.vector(IC(depx[,i],depz[,i],tt,tt,0.11)$low)
+  p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
+  ic_samples_high[,i] <- ic_samples_high[,i] + as.vector(IC(samplex[,i],samplez[,i],tt,tt,0.11)$high)
+  ic_samples_low[,i] <- ic_samples_low[,i] + as.vector(IC(samplex[,i],samplez[,i],tt,tt,0.11)$low)
 }
 
 # Computation on average for big N
 p12_hat_moyen <- rowMeans(p12_hat_samples); ic_samples_high <- rowMeans(ic_samples_high); ic_samples_low <-rowMeans(ic_samples_low)
 
 # Plot
+library(ggplot2)
 df <-data.frame(x=tt,y=p12_hat_moyen,z1=ic_samples_low , z2=ic_samples_high ,theo=p12_theo)
 p12plot<-ggplot(df,aes(x=tt,y=p12_hat_moyen)) + geom_line(colour="red") 
 p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
@@ -157,8 +158,31 @@ p12_error <- abs(p12_theo - p12_hat_moyen)
 plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
 
 # Incertitude of estimation
-ic_error <- abs(ic_samples_high - p12_hat_moyen) # I DONT UNDERSTAND WHY
+ic_error <- ic_samples_high - ic_samples_low
 plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
+
+# max error evolution within N
+
+Nn=3
+max_error_evolution <- rep(0,Nn)
+for (j in 1:Nn) {
+  samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+  samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+  p12_hat_samples <- matrix(0,size,N)
+  for (i in 1:N){
+    p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
+  }
+  p12_hat_moyen <- rowMeans(p12_hat_samples)
+  p12_error <- abs(p12_theo - p12_hat_moyen)
+  max_error_evolution[j] <- max(p12_error)
+}
+return(max_error_evolution)
+
+#CV_err[i]<-(GZ_test - GZ_predict[i])^2
+#}
+#CV_err_h[j]<-(mean(CV_err))^0.5
+#}
+#return(CV_err_h) #vector of errors
 
 ################## Distributions with randon loction parameter ###############################
 # distributions
