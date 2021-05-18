@@ -119,7 +119,7 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
 library(ggplot2)
 p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
 ic<-IC(X,Z,tt,tt,0.11) 
-df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,theo=p12_theo)
+df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,heo=p12_theo)
 p12plot<-ggplot(df,aes(x=tt,y=p12_hat)) + geom_line(colour="red") 
 p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
 p12plot <- p12plot + geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) 
@@ -177,12 +177,12 @@ for (j in 1:Nn) {
 }
 plot(1:Nn,max_error_evolution)
 
-################## Distributions with randon loction parameter ###############################
+################## Distributions with random location parameter ###############################
 # distributions
 ui<-rnorm(2);bi<-rnorm(2,mean=1,sd=0.1)
 X1<-rgev(size, loc=ui[1], scale=1, shape=0); X2<-rgev(size, loc=ui[2], scale=1, shape=0)
 Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0); Z2<-rgev(size, loc = ui[2]+bi[2]*t, scale = 1, shape = 0)
-# p12 computaion
+# p12 computation
 p12_1<-p12_NonPar(X1,Z1,tt,tt,0.2); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.2);ic_1<-IC(X1,Z1,tt,tt,0.2) ;ic_2<-IC(X2,Z2,tt,tt,0.2) 
 #plot
 df_Ex <-data.frame(temp=tt,x=p12_1,y=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
@@ -216,7 +216,7 @@ hchoix_f<-ggplot(df_h_2,aes(x=tt,y=G_z)) + geom_point(colour="#999999",size=0.5,
   geom_line(aes(x=tt,y=p12_f3,colour="green"))
 hchoix_f
 
-##### Optimal bandwith computation
+##### Optimal bandwidth computation
 
 # Computation of vector of errors
 
@@ -263,33 +263,33 @@ tt <- seq.int(size)/size
 m <- 2
 # paraters of the models
 ui<-rnorm(m) 
-bi<-rnorm(m,sd=0.1)
+bi<-rnorm(m,mean=1,sd=0.1)
+
+scale_Z_real=1
+shape_Z_real=0
 
 # fonction that creates "real" factual run
-Z_real_comp <- function(size=size,tt=tt,scale=1,shape=0) {
-  ui=0; bi=1 # parameters of 
+Z_real_comp <- function(size=size,scale_Z_real,shape_Z_real) {
+  mean=0; coef=1 # parameters of gev
   Z_real<-rep(0,size)
   for (i in 1:size/4){
-    Z_real[i]<-Z_real[i]+rgev(1,loc=ui, scale=1, shape=0)
+    Z_real[i]<-Z_real[i]+rgev(1,loc=mean, scale_Z_real, shape_Z_real)
   }
   for (i in 251 : size){
-    Z_real[i]<-Z_real[i]+rgev(1,loc=ui+(bi*tt[i]-250)/1000, scale=1, shape=0)
+    Z_real[i]<-Z_real[i]+rgev(1,loc=mean+(coef*tt[i]-(size/4))/size, scale_Z_real, shape_Z_real)
   }
   return(Z_real)
 }
 
-# Z_real[i]<-Z_real[i]+rgev(1,loc=ui+(((bi*tt[i]) - 250)/1000), scale=1, shape=0)
-
 # "real" factual(Z) and couterfactual(X) run
-Z_real<-Z_real_comp(size,tt,scale=1,shape=0)
-X_real<-rgev(size, loc=0, scale=1, shape=0) # ui=0 , bi=1
+Z_real<-Z_real_comp(size,scale=1,shape=0)
+X_real<-rgev(size*5, loc=mean, scale=1, shape=0)
 # run from model 1
 X1<-rgev(size*5, loc=ui[1], scale=1, shape=0)
-Z1<-rgev(size, loc = ui[1]+bi[1]*t, scale = 1, shape = 0)
+Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0)
 # run from model 2
 X2<-rgev(size*5, loc=ui[2], scale=1, shape=0)
-Z2<-rgev(size, loc = ui[2]+bi[2]*t, scale = 1, shape = 0)
-
+Z2<-rgev(size, loc = ui[2]+bi[2]*tt, scale = 1, shape = 0)
 # "real" p12 , p12_hat and CI of each model 
 p12_real<-p12_NonPar(X_real,Z_real,tt,tt,0.11); p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
 ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
@@ -299,6 +299,48 @@ p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(ae
   geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12_real, colour="blue")
 p12plot
 
+dev.off()
+
+################# Monde avant "effet" du forçage entrepique 
+
+# run from model 1
+X1<-rgev(size*5, loc=ui[1], scale=1, shape=0); Z1<-rgev(size, loc = ui[1], scale = 1, shape = 0)
+# run from model 2
+X2<-rgev(size*5, loc=ui[2], scale=1, shape=0); Z2<-rgev(size, loc = ui[2], scale = 1, shape = 0)
+
+p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
+ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
+
+p12hat_moyen<- (p12_1 + p12_2)/2
+
+df_Ex <-data.frame(temp=tt, y1=p12_1, y2=p12_2, y3= p12hat_moyen, z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
+p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
+  geom_line(aes(y=p12_2), colour="blue")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12hat_moyen, colour="green")+
+  geom_hline(yintercept = 0.5) + ggtitle("p02 estimation over time") + ylab("p02") + xlab("time")
+p12plot
+
+################################## p13_t computation #######################################
+
+p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
+  # G_Z computation
+  G_emp_carre <- ecdf(X)
+  G_Z_carre <- (G_emp_carre(Z))^2
+  # W computation
+  Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
+  W <- Kij / rowSums(Kij)
+  # p12_hat computation
+  p13_hat <- W %*% G_Z_carre
+}
+
+p13_hat<-p13_NonPar(X,Z,tt,tt,0.11)
+plot(tt, p13_hat)
+p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
+plot(tt, p12_hat)
 
 dev.off()
+
+############# Utilisation of on-parametric kernel computation of p12, p13 for p1r parametric computation ##################
+
+
+
 
