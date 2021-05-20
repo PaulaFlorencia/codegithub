@@ -130,6 +130,8 @@ p12plot
 
 # Computation of multiple samples (X,Z)
 N <- 10
+sigma <- seq(1, 2, length.out = size)
+xi = 0.5
 samplex <- NULL; for (i in 1:N){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
 samplez <- NULL; for (i in 1:N){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
 
@@ -142,7 +144,7 @@ for (i in 1:N){
 }
 
 # Computation on average for big N
-p12_hat_moyen <- rowMeans(p12_hat_samples); ic_samples_high <- rowMeans(ic_samples_high); ic_samples_low <-rowMeans(ic_samples_low)
+p12_hat_moyen <- rowMeans(as.matrix(p12_hat_samples)); ic_samples_high <- rowMeans(as.matrix(ic_samples_high)); ic_samples_low <-rowMeans(as.matrix(ic_samples_low))
 
 # Plot
 library(ggplot2)
@@ -161,8 +163,8 @@ plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
 ic_error <- ic_samples_high - ic_samples_low
 plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
 
-# max error evolution within N
-Nn=100
+# max error evolution within N (Global error)
+Nn=50
 max_error_evolution <- rep(0,Nn)
 for (j in 1:Nn) {
   samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
@@ -176,6 +178,40 @@ for (j in 1:Nn) {
   max_error_evolution[j] <- max(p12_error)
 }
 plot(1:Nn,max_error_evolution)
+
+# Conditional error: 
+
+Nn=50
+matrix_p12_moyen <- NULL
+mean_p12 <- matrix(0,size,Nn)
+conditional_error <- matrix(0,size,Nn)
+for (j in 1:Nn) {
+  samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+  samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+  p12_hat_samples <- NULL; for (i in 1:j){p12_hat_samples<-cbind(p12_hat_samples,p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11))}
+  mean_p12[,j] <- rowMeans(p12_hat_samples)
+  conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
+}
+
+matplot(x= tt , y= as.matrix(conditional_error), type='l', pch=1, 
+        col= 2:5, xlab='tt', ylab = 'error')
+###########
+Nn=c(5,50,500)
+mean_p12 <- matrix(0,size,length(Nn))
+conditional_error <- matrix(0,size,length(Nn))
+for (j in 1:length(Nn)) {
+  samplex <- NULL; for (i in 1:Nn[j]){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+  samplez <- NULL; for (i in 1:Nn[j]){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+  p12_hat_samples <- NULL; for (i in 1:Nn[j]){p12_hat_samples<-cbind(p12_hat_samples,p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11))}
+  mean_p12[,j] <- rowMeans(p12_hat_samples)
+  conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
+}
+
+matplot(x= tt , y= conditional_error, type='l', pch=1, 
+        col= 2:5, xlab='tt', ylab = 'error')
+
+for (j in Nn) {print(j)}
+# rouge,vert, bleu 
 
 ################## Distributions with random location parameter ###############################
 # distributions
@@ -257,6 +293,8 @@ opt_err <-min(CV_err_h); opt_err # optimal erreur = 0.03589835
 
 ############################# Add "real" variable Y #################################
 
+
+###################### X stationary and Z with trend
 size <-  250*4
 tt <- seq.int(size)/size
 # numer of models 
@@ -269,7 +307,7 @@ scale_Z_real=1
 shape_Z_real=0
 
 # fonction that creates "real" factual run
-Z_real_comp <- function(size=size,scale_Z_real,shape_Z_real) {
+Z_real_comp <- function(size,scale_Z_real,shape_Z_real) {
   mean=0; coef=1 # parameters of gev
   Z_real<-rep(0,size)
   for (i in 1:size/4){
@@ -301,7 +339,7 @@ p12plot
 
 dev.off()
 
-################# Monde avant "effet" du forçage entrepique 
+################# Monde avant "effet" du forçage anthropique 
 
 # run from model 1
 X1<-rgev(size*5, loc=ui[1], scale=1, shape=0); Z1<-rgev(size, loc = ui[1], scale = 1, shape = 0)
@@ -339,8 +377,89 @@ plot(tt, p12_hat)
 
 dev.off()
 
-############# Utilisation of on-parametric kernel computation of p12, p13 for p1r parametric computation ##################
+############# Using non-parametric kernel computed p12, p13 for p1r parametric computation ##################
 
+# we will need the functions from the file Fonctions-for-far-WeibullEstimation.R
 
+#
+laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(-5)){
+  vala=fac*(j*lambda)^k  
+  upperbndmodif=upperbnd^vala   
+  lowerbndmodif=upperbndmodif*10^(-5) 
+  I <- integrate(f=funcLaplace,
+                 lower=lowerbndmodif,
+                 upper=upperbndmodif,
+                 subdivisions=1000L,
+                 rel.tol=tol,
+                 m=j,lam=lambda,k=k,a=vala,
+                 stop.on.error = FALSE)
+  resultat <- I$value
+  return(resultat)
+}
 
+functiong <- function(theta,vecx){
+  lambdaval=theta[1] ; kval = theta[2]
+  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  M <- cbind( vecx - p12val ,  vecx^2 - p13val )
+  return(M)
+}
 
+#
+GZestimation <- function(matX,matZ,methodGhatm="ecdfmodif",bandwth=0,b=0.05){
+  matX <- as.matrix(matX)
+  matZ <- as.matrix(matZ) 
+  dimnsZ=dim(matZ) 
+  matGm <- matrix(rep(0,prod(dimnsZ)),nrow=dimnsZ[1],ncol=dimnsZ[2])
+  for (j in 1:dimnsZ[2]){
+    X <- matX[,j]
+    Z <- matZ[,j]
+    if (methodGhatm=="npudist"){
+      if (bandwth == 0){
+        matGm[,j] <- npudist(tdat=X,edat=Z)$dist  
+      } else {
+        matGm[,j] <- npudist(tdat=X,edat=Z,bws=bandwth)$dist  
+      }
+    } 
+    if (methodGhatm=="ecdf"){
+      matGm[,j] <- ecdf(X)(Z) 
+    }
+    if (methodGhatm=="ecdfmodif"){
+      matGm_temp <- ecdf(X)(Z) 
+      m <- nrow(matX)
+      matGm[,j] <- (m*matGm_temp+b)/(m+1) 
+    }
+  }
+  return(matGm)  # dans notre cas elle nous retoune G(Z)m empirique pour le couple (X,Z)
+}
+
+#
+weibullGMMestim <- function(matGm,truevalues=NULL){
+  matGm <- as.matrix(matGm) 
+  Ncol <- dim(matGm)[2] 
+  lambdahat.vec <- rep(0,Ncol)
+  khat.vec <- rep(0,Ncol)
+  if ( is.null(truevalues) ){
+    startvalues <- matrix(rep(1,2*Ncol),nrow=2,ncol=Ncol)
+    # starting values, if not precised, are set to 1 and 1 for lambda and k
+  } else {
+    startvalues <- truevalues
+  }
+  for (j in 1:Ncol){
+    #cat(j,":")
+    GnhatZ = matGm[,j]  
+    EGMMweibull <- gmm(g=functiong , 
+                       x=GnhatZ , 
+                       t0=startvalues[,j],
+                       optfct = "nlminb",
+                       lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
+                       onlyCoefficients = TRUE
+    )
+    
+    lambdahat.vec[j] <- EGMMweibull$coefficients[[1]] 
+    khat.vec[j] <- EGMMweibull$coefficients[[2]] 
+    #cat(" ",round(lambdahat.vec[j],4),",")
+    #cat(round(khat.vec[j],4),"(GMM)\n")
+  }   
+  return( list("lambdahat"=lambdahat.vec,"khat"=khat.vec) ) 
+}
