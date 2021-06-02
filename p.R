@@ -622,17 +622,5 @@ plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ
   
 }
 
-
-
-plotd_time_Wclass <- function(size,locat,mu,scal,shpe){
-  X = rgev(size, loc = locat, scale = scal, shape = shpe)
-  mu_t= c(mu[1],mu[length(mu)/4],mu[length(mu)/2], mu[3*length(mu)/4], mu[length(mu)])
-  plot(density(X),col="black",)
-  for (i in 1:length(mu_t)){
-    Z = rgev(size, loc = mu_t[i], scale = 1, shape = 0)
-    lines(density(Z),col="gray")
-  }
-}
-
 plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
   
