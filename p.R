@@ -383,6 +383,30 @@ dev.off()
 
 library(stats4); library(gmm); library(stats); library(np); library(EWGoF)
 
+simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0,graph=TRUE){
+
+  if (sigZ == 0) { sigZ = sigX } 
+  if (supportauto == TRUE){ muZ <- muX + sigZ/ksiZ - sigX/ksiX }
+  matX <- matrix(rep(0,m*N),nrow=m,ncol=N) 
+  matZ <- matrix(rep(0,n*N),nrow=n,ncol=N) 
+  for (j in 1:N){
+    matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
+    matZ[,j] = muZ + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
+  }
+  if (graph==TRUE){
+    plot(density(matX[,1]),
+         main="Kernel density estimates \nfor the first X sample (black, counterfactual),\n and the first Z sample (red, factual)",
+         cex.main=0.8,
+         xlim=c(-4,12))
+    lines(density(matZ[,1]),col="red")
+  }
+  return(list("matX"=matX,
+              "matZ"=matZ,
+              "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
+              "k"=ksiX/ksiZ) 
+  )  
+}
+
 GZestimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   
   matX <- as.matrix(matX)
@@ -399,54 +423,6 @@ GZestimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   return(list("matp12"=matp12,"matp13"=matp13))
 }
   
-weibullGMMestim <- function(matp12,matp13,truevalues=NULL){
-  matp12 <- as.matrix(matp12)
-  matp13 <- as.matrix(matp13)
-  Nligne <- dim(matp12)[1]
-  Ncol <- dim(matp12)[2] 
-  lambdahat.mat <- matrix(rep(0,prod(matp12)),nrow=Nligne,ncol=Ncol)
-  khat.mat <- matrix(rep(0,prod(matp12)),nrow=Nligne,ncol=Ncol)
-  if ( is.null(truevalues) ){
-    startvalueslambd <- matrix(rep(1,prod(matp12)),nrow=Nligne,ncol=Ncol)
-    startvaluesk <- matrix(rep(1,prod(matp12)),nrow=Nligne,ncol=Ncol)
-    # starting values, if not precised, are set to 1 and 1 for lambda and k
-  } else {
-    startvalues <- truevalues
-  }
-  for (j in 1:Ncol){
-    p12hat = matp12[,j]
-    p13hat = matp13[,j]
-    
-    lambdahat.vec = lambdahat.mat[,j]
-    khat.vec = khat.mat[,j]
-    
-    startvalueslambd.vec <- startvalueslambd[,j]
-    startvaluesk.vec <- startvaluesk[,j]
-    
-    for (i in 1:Nligne){
-      p12hat_t=p12hat[i]
-      p13hat_t=p13hat[i]
-      phat=rbind(p12hat_t,p13hat_t)
-      
-      startvalueslambd_t=startvalueslambd[i]
-      startvaluesk_t=startvaluesk[i]
-      startval_t=rbind(startvalueslambd_t,startvaluesk_t)
-    
-      EGMMweibull <- gmm(g=functiong , 
-                         x=phat , 
-                         t0=startval_t,
-                         optfct = "nlminb",
-                         lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
-                         onlyCoefficients = TRUE
-      )
-      lambdahat.vec[i] <- EGMMweibull$coefficients[[1]]
-      khat.vec[i] <- EGMMweibull$coefficients[[2]] 
-    }
-    lambdahat.mat[,j] <- lambdahat.vec
-    khat.mat[,j] <- khat.vec
-  }   
-  return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
-}
 
 funcLaplace <- function(x,m,lam,k,a){ 
   # Utilitary function for use in the integrate() statement
@@ -455,37 +431,7 @@ funcLaplace <- function(x,m,lam,k,a){
 }
 
 laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(-5)){
-  # By default (i.e. when upperbnd=1), this basic but crucial function computes E(exp(-j*W)) 
-  # for any given integer j, where W is a Weibull(lambda,k) variable.
-  # 
-  # The computation is based on integration rather than partial power series, 
-  # which has proved particularly unreliable in our context. 
-  #
-  # Input :
-  # - single values of j, lambda and k (this function is NOT vectorialized)
-  #   (in practice, lambda and k are estimates of lambda and k issued from weibullGMMestim())
-  # - other optional parameters controlling the way the numerical integration is conducted 
-  #   (the integral in question is the one in formula (7) in the paper)
-  #  > lowerbnd indicates the lower bound from which we will ask R to integrate 
-  #    (the value 0 is not allowed, but it must be sufficiently small for the 
-  #     evaluation to be valuable) ; by default, lowerbnd=10^(-6). 
-  #  > upperbnd is 1 by default : this upper bound will be set to some other 
-  #    value when laplaceWeibull() will be called upon in function Mrminusp1r2() for instance. 
-  #  > the parameter tol indicates the desired precision for the numerical approximation of the integral. 
-  #  > the parameter fac is a tuning parameter used for improving accuracy (see paper)
-  #   
-  # Output :
-  # - the numerical evaluation of E(exp(-j*W)) when W~Weibull(lambda,k)
-  #
-  # Used in function : many functions in this file
-  # Requires : funcLaplace()
-  #
-  # Example illustrating that this function works :
-  ##  > integrate(funcLaplace,lower=10^(-8),upper=1,m=10,lam=0.3,k=1.3,a=1)
-  ##  0.2049931 with absolute error < 9.9e-05
-  ##  > laplaceWeibull(10,lam=0.3,k=1.3)
-  ##  [1] 0.2049932
-  #
+  cat("lam=",lambda,",k=",k,"\n")
   vala=fac*(j*lambda)^k  
   upperbndmodif=upperbnd^vala   
   lowerbndmodif=upperbndmodif*10^(-5) 
@@ -501,37 +447,136 @@ laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(
 }
 
 functiong <- function(theta,vecx){
-  # A utilitary function required for the M-estimation 
-  # of (lambda,k) in function weibullGMMestim()
-  #
-  # Input :
-  # - theta : a vector of size 2 containing the tentative values of lambda and k
-  # - vecx  : a vector of size n supposed to contain the values \hat{G}_m(Z_i)
-  # Output :
-  # - a nx2 matrix which first and second columns respectively contain the values 
-  #     \hat{G}_m(Z_i) - p_12(lambda,k)  and  (\hat{G}_m(Z_i))^2 - p_13(lambda,k)  
-  #
-  # Used in : weibullGMMestim()
-  # Requires : laplaceWeibull() 
-  
   lambdaval=theta[1] ; kval = theta[2]
   p12 = vecx[1] ; p13 = vecx[2]
   p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
   p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  M <- cbind( p12 - p12val ,  p13 - p13val )
+  M <- c( p12 - p12val ,  p13 - p13val )
   return(M)
 }
 
-matp<-GZestimation(X,Z,tt,tt,0.11,kern=dEpan)
-tethahat<-weibullGMMestim(matp$matp12,matp$matp13,truevalues=NULL)
 
-thetahat <- weibullGMMestim(vecGm)
+
+# WeibullGMMestim2
+
+functiong2 <- function(theta,vecx){
+  lambdaval=theta[1] ; kval = theta[2]
+  p12=vecx[1] ; p13 = vecx[2]
+  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  M <- c( p12 - p12val ,  p13 - p13val )
+  return(M)
+}
+
+weibullGMMestim2 <- function(matp12,matp13,truevalues=NULL){
+  matp12 <- as.matrix(matp12)
+  matp13 <- as.matrix(matp13)
+  Nligne <- dim(matp12)[1]
+  Ncol <- dim(matp12)[2] 
+  lambdahat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  khat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  if ( is.null(truevalues) ){
+    startvalueslambd <- matrix(1,nrow=Nligne,ncol=Ncol)
+    startvaluesk <- matrix(1,nrow=Nligne,ncol=Ncol)
+    # starting values, if not precised, are set to 1 and 1 for lambda and k
+  } else {
+    startvalues <- truevalues
+  }
+  for (j in 1:Ncol){
+    p12hat = matp12[,j]
+    p13hat = matp13[,j]
+    
+    lambdahat.vec = lambdahat.mat[,j]
+    khat.vec = khat.mat[,j]
+    
+    startvalueslambd.vec <- startvalueslambd[,j]
+    startvaluesk.vec <- startvaluesk[,j]
+    
+    for (i in 1:Nligne){
+      cat("\n",i,"eme ligne :")
+      p12hat_t=p12hat[i]
+      p13hat_t=p13hat[i]
+      phat=c(p12hat_t,p13hat_t)
+      
+      startvalueslambd_t=startvalueslambd.vec[i]
+      startvaluesk_t=startvaluesk.vec[i]
+      startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
+      
+      EGMMweibull <- fsolve2(functiong2,x0=startval_t,vecx=phat,J=J12
+      )
+      
+      lambdahat.vec[i] <- EGMMweibull$x[1]
+      khat.vec[i] <- EGMMweibull$x[2] 
+    }
+    lambdahat.mat[,j] <- lambdahat.vec
+    khat.mat[,j] <- khat.vec
+  }   
+  return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
+}
+
+
+# WeibullGMMestim3 , using xnew<-x0/2 without J
+weibullGMMestim3 <- function(matp12,matp13,truevalues=NULL){
+  matp12 <- as.matrix(matp12)
+  matp13 <- as.matrix(matp13)
+  Nligne <- dim(matp12)[1]
+  Ncol <- dim(matp12)[2] 
+  lambdahat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  khat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  if ( is.null(truevalues) ){
+    startvalueslambd <- matrix(1,nrow=Nligne,ncol=Ncol)
+    startvaluesk <- matrix(1,nrow=Nligne,ncol=Ncol)
+    # starting values, if not precised, are set to 1 and 1 for lambda and k
+  } else {
+    startvalues <- truevalues
+  }
+  for (j in 1:Ncol){
+    p12hat = matp12[,j]
+    p13hat = matp13[,j]
+    
+    lambdahat.vec = lambdahat.mat[,j]
+    khat.vec = khat.mat[,j]
+    
+    startvalueslambd.vec <- startvalueslambd[,j]
+    startvaluesk.vec <- startvaluesk[,j]
+    
+    for (i in 1:Nligne){
+      cat("\n",i,"eme ligne :")
+      p12hat_t=p12hat[i]
+      p13hat_t=p13hat[i]
+      phat=c(p12hat_t,p13hat_t)
+      
+      startvalueslambd_t=startvalueslambd.vec[i]
+      startvaluesk_t=startvaluesk.vec[i]
+      startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
+      
+      EGMMweibull <- fsolve3(functiong,x0=startval_t,vecx=phat
+                            )
+      
+      lambdahat.vec[i] <- EGMMweibull$x[1]
+      khat.vec[i] <- EGMMweibull$x[2] 
+    }
+    lambdahat.mat[,j] <- lambdahat.vec
+    khat.mat[,j] <- khat.vec
+  }   
+  return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
+}
+
+J12 <- function(x,vecx){jacobianFunctiong12(x[1],x[2],vecx)[1]
+}
+
+library(pracma)
+
+data <- simulWclass(m=20,n=20,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
+tt <- seq.int(20)/20
+matp<-GZestimation(data$matX,data$matZ,tt,tt,0.11,kern=dEpan) 
+
+# pas de parametre phat en fsolve()
+thetahat2<-weibullGMMestim2 (matp$matp12,matp$matp13,truevalues=NULL)
+
+#xnew<-x0/2
+thetahat<-weibullGMMestim3 (matp$matp12,matp$matp13,truevalues=NULL)
   
-data <- simulWclass(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
-matp<-GZestimation(X,Z) 
-
-thetahat <- weibullGMMestim(vecGm)
-
 #################### Observation of distributions in time #########################
 
 # test ( just for Gumbel, X stationary, Z non-sationary with linear growth in location parameter)
@@ -549,27 +594,28 @@ n=1000
 mu = seq(0, 5, length.out = n) 
 plotd_time(n,0,mu,1,0)
 
+mu = seq(0, 3, length.out = n) 
+plotd_time(n,0,mu,1,0.2)
+
 
 ########################### Simulate W-class trajectories with non-sationnary Z #################
 
 simulWclass_trend <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,supportauto=TRUE,muX=0,muZ=0,sigZ=0,graph=TRUE){
 
   if (sigZ == 0) { sigZ = sigX } 
-  muZ <- matrix(rep(0,m*N),nrow=n,ncol=N)
+  muZ <- matrix(nrow=n,ncol=N)
   if (supportauto == TRUE){ 
     for (i in 1:n){
       muZ[i] <- muX + sigZ/ksiZ - sigX/ksiX - b.vec[i]*tt.vec[i]}
     }
   
-  matX <- matrix(rep(0,m*N),nrow=m,ncol=N) 
-  matZ <- matrix(rep(0,n*N),nrow=n,ncol=N) 
+  matX <- matrix(nrow=m,ncol=N) 
+  matZ <- matrix(nrow=n,ncol=N) 
   
   for (j in 1:N){
-    for (i in 1:n){
-      matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
-      matZ[,j] = (muZ[i]+b.vec[i]*tt.vec[i]) + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
+    matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
+    matZ[,j] = (muZ+b.vec*tt.vec) + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
     }
-  }
   
   if (graph==TRUE){
     plot(density(matX[,1]),
@@ -595,20 +641,18 @@ data<-simulWclass_trend(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt
 plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ=0){
   
   if (sigZ == 0) { sigZ = sigX } 
-  muZ <- matrix(rep(0,m*N),nrow=n,ncol=N)
+  muZ <- matrix(nrow=n,ncol=N)
    
   for (i in 1:n){
       muZ[i] <- muX + sigZ/ksiZ - sigX/ksiX - b.vec[i]*tt.vec[i]}
   
-  matX <- matrix(rep(0,m*N),nrow=m,ncol=N) 
-  matZ <- matrix(rep(0,n*N),nrow=n,ncol=N) 
+  matX <- matrix(nrow=m,ncol=N) 
+  matZ <- matrix(nrow=n,ncol=N) 
   
-  for (j in 1:N){
-    for (i in 1:n){
-      matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
-      matZ[,j] = (muZ[i]+b.vec[i]*tt.vec[i]) + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
-    }
-  }
+  #for (j in 1:N){
+   # matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
+    #matZ[,j] = (muZ+b.vec*tt.vec) + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
+    #}
   X = rgev(m, loc = muX, scale = sigX, shape = ksiX)
   muZ_t= c(muZ[1],muZ[length(muZ)/4],muZ[length(muZ)/2], muZ[3*length(muZ)/4], muZ[length(muZ)])
   tt.vec_t= c(tt.vec[1],tt.vec[length(muZ)/4],tt.vec[length(muZ)/2], tt.vec[3*length(muZ)/4], tt.vec[length(muZ)])
@@ -616,11 +660,13 @@ plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ
   
   plot(density(X),col="black",)
   for (i in 1:length(muZ_t)){
-    Z = rgev(n, loc = mu_t[i]+b.vec_t[i]*tt.vec_t[i], scale = sigZ, shape = ksiZ)
+    Z = rgev(n, loc = muZ_t[i]+b.vec_t[i]*tt.vec_t[i], scale = sigZ, shape = ksiZ)
     lines(density(Z),col="gray")
   }
   
 }
 
+plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.05,ksiZ=-0.05,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
 plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
   
+
