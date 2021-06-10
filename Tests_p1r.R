@@ -105,3 +105,88 @@ p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(4,ncol=1,nrow=size))
 plot(p1rfar$p1r)
 lines(matp$matp12)
 lines(matp$matp13)
+
+#########
+
+################ testing the method with "known" W-class F and CF #############
+
+# 1. for 1 trayactory {(X)t,(Z)t} (N=1)
+size <-  100
+tt <- seq.int(size)/size
+muz = 2 + seq(0, 5, length.out = size)
+mux = 0
+sigmax = 1
+sigmaz = 1
+r=10 ; cat("r: ", r )
+X = rgev(size * 5, loc = mux, scale = sigmax, shape = 0)
+Z = rgev(size, loc = muz, scale = sigmaz, shape = 0)
+# 2. lambda_t and k_t theorique 
+sigmax_t <- rep(sigmax,size)
+sigmaz_t <- rep(sigmaz,size)
+k_t_theo <- sigmax_t/sigmaz_t; cat("Thoretic values of k_t: ", k_t_theo )
+muz_t <- muz
+mux_t <- rep(mux, size)
+lambda_t_theo <- exp((mux_t-muz_t)/sigmax_t);cat("Thoretic values of lambda_t: ", lambda_t_theo )
+# 3. p12_t and p13_t theorique
+theta_theo <- 1 / exp(muz)
+p12_t_theo <- 1 / (1 + theta_theo);cat("Thoretic values of p12_t: ", p12_t_theo )
+p13_t_theo <- 1 / (1 + 2*theta_theo); cat("Thoretic values of p13_t: ", p13_t_theo  )
+p1r_t_theo <- 1 / (1 + (r-1)*theta_theo); cat("Thoretic values of p1r_t: ", p1r_t_theo  )
+# 4. p12hat and p13hat
+matp<-GZestimation(X,Z,tt,tt,0.11,kern=dEpan)
+p12hat_t<-matp$matp12; cat("Estimated values of p12_t: ", p12hat_t  )
+p13hat_t<-matp$matp13; cat("Estimated values of p3r_t: ", p13hat_t  )
+err_p12 <- abs(p12_t_theo - p12hat_t); cat("dif p12: ", err_p12  )
+err_p13 <- abs(p13_t_theo - p13hat_t); cat("dif p13: ", err_p13  )
+# 5. lambdahat_t and khat_t (with optim)
+thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+lambdahat_t <- thetahat$lambdahat; cat("Estimated values of lambda_t: ", lambdahat_t )
+khat_t <- thetahat$khat; cat("Estimated values of k_t: ", khat_t  )
+optimval_theo<-fg1(c(lambda_t_theo,k_t_theo ),c(p12_t_theo,p13_t_theo)) # with theoretic p12t p13t
+cat("theoretic min of function: ", optimval_theo )
+optimval_hat<-fg1(c(lambdahat_t,khat_t ),c(p12_t_theo,p13_t_theo)) # with estiated p12t p13t
+cat("estimated min of function: ", optimval_hat )
+#[1] optimval_theo: 0.07771465, optimval_hat: 0.07810431
+# 6. Comparation between lambdahat_t and lambda_t_theo (same for k)
+err_lambda <- abs(lambdahat_t-lambda_t_theo); cat("error in lambda_t estimation: ", err_lambda )
+err_k <- abs(khat_t-k_t_theo); cat("error in k_t estimation ", err_k)
+# il y a toujours beaucoup d'erreur sur k (qui en theorie est constant)
+# 7. computation of p1rhat_t
+p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size)) # r=4
+cat("estimation of p1r_t: ", p1rfar$p1r )
+# 8. difference between p1r_T theoretic estimated 
+err_p1r <- abs(p1rfar$p1r - p1r_t_theo); cat("error in p1r_t estimation: ", err_p1r)
+#plot(tt,err_p1r,ylab="p1.5")
+plot(tt,p1r_t_theo,type="l",col="red")
+lines(tt,p1rfar$p1r)
+
+
+# 2. for multiple trayactories {(X)t,(Z)t}
+
+## not working yet
+FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec){
+  
+  theta_theo <- 1 / exp(muz.vec)
+  p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+  
+  matX <- matrix(nrow=m,ncol=N)
+  matZ <- matrix(nrow=n,ncol=N)
+  matp <- matrix(nrow=n,ncol=N)
+  
+  for (j in 1:N){
+    natX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
+    matZ[,j] <- rgev(n, loc = muZ.vec, scale = sigZ.vec, shape = 0)
+    matp[,j]<-GZestimation(matX[,j],matX[,j],tt,tt,h,kern=dEpan)
+  }
+  
+  thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
+  p1r_mean <- rowMeans(p1rfar$p1r)
+  
+  plot(tt,p1r_t_theo,type="l",col="red")
+  lines(tt,p1r_mean)
+  
+  return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean))
+}
+
+testmoyen<-FastTestforp1r_gumbel(tt,0.11,5,size,size,4,rep(sigx,size),rep(sigz,size),rep(mux,size),muz)
