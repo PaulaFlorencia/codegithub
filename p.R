@@ -379,9 +379,9 @@ dev.off()
 
 ############# Using non-parametric kernel computed p12, p13 for p1r parametric computation ##################
 
-# we will need the functions from the file Fonctions-for-far-WeibullEstimation.R
-
 library(stats4); library(gmm); library(stats); library(np); library(EWGoF)
+
+# simulate multiple stationnary {(X)t,(Z)t} W-class trajectories
 
 simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0,graph=TRUE){
 
@@ -407,6 +407,8 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
   )  
 }
 
+# Estimate p12t and p13t for each trajectory {(X)t,(Z)t}
+
 GZestimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   
   matX <- as.matrix(matX)
@@ -424,9 +426,9 @@ GZestimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
 }
   
 
+# funcLaplace and laplace Weibull are necessary to compute E(G(Z)^j)
+
 funcLaplace <- function(x,m,lam,k,a){ 
-  # Utilitary function for use in the integrate() statement
-  # in function laplaceWeibull() defined below
   (1/a) * exp( -(m*lam/a^(1/k))*(-log(x))^(1/k) ) * x^(1/a - 1) 
 }
 
@@ -455,20 +457,14 @@ functiong <- function(theta,vecx){
   return(M)
 }
 
+################### Estimation of lambda_t and k_t using different méthods
 
+# 1.
+# Using fsolve() with jacobian matrix. we will call this method "weibullGMMestim"
 
-# WeibullGMMestim2
+J12 <- function(x){jacobianFunctiong12(x[1],x[2])}
 
-functiong2 <- function(theta,vecx){
-  lambdaval=theta[1] ; kval = theta[2]
-  p12=vecx[1] ; p13 = vecx[2]
-  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  M <- c( p12 - p12val ,  p13 - p13val )
-  return(M)
-}
-
-weibullGMMestim2 <- function(matp12,matp13,truevalues=NULL){
+weibullGMMestim <- function(matp12,matp13,truevalues=NULL){
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
   Nligne <- dim(matp12)[1]
@@ -502,7 +498,9 @@ weibullGMMestim2 <- function(matp12,matp13,truevalues=NULL){
       startvaluesk_t=startvaluesk.vec[i]
       startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
       
-      EGMMweibull <- fsolve2(functiong2,x0=startval_t,vecx=phat,J=J12
+      fg <- function(theta){functiong(theta,vecx=phat)}
+      
+      EGMMweibull <- fsolve(fg,x0=startval_t,J=J12
       )
       
       lambdahat.vec[i] <- EGMMweibull$x[1]
@@ -514,8 +512,99 @@ weibullGMMestim2 <- function(matp12,matp13,truevalues=NULL){
   return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
 }
 
+# 2.
+# Using fsolve3() without jacobian matrix. we will call this method "weibullGMMestim3"
+# fsolve3() is a modification of fsolev(), where we impose [lambda,k]_xnew <- ([lambda,k]_x0)/2 when lamba<0
 
-# WeibullGMMestim3 , using xnew<-x0/2 without J
+fsolve3<-function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.eps^(0.5), 
+          ...) 
+{
+  if (!is.numeric(x0)) 
+    stop("Argument 'x0' must be a numeric vector.")
+  x0 <- c(x0)
+  fun <- match.fun(f)
+  f <- function(x) fun(x, ...)
+  n <- length(x0)
+  m <- length(f(x0))
+  if (n == 1) 
+    stop("Function 'fsolve' not applicable for univariate root finding.")
+  if (!is.null(J)) {
+    Jun <- match.fun(J)
+    J <- function(x) J(x, ...)
+  }
+  else {
+    J <- function(x) jacobian(f, x)
+  }
+  if (m == n) {
+    sol = broyden3(f, x0, J0 = J(x0), maxiter = maxiter, 
+                  tol = tol)
+    xs <- sol$zero
+    fs <- f(xs)
+  }
+  else {
+    sol <- gaussNewton(x0, f, Jfun = J, maxiter = maxiter, 
+                       tol = tol)
+    xs <- sol$xs
+    fs <- sol$fs
+    if (fs > tol) 
+      warning("Minimum appears not to be a zero -- change starting point.")
+  }
+  return(list(x = xs, fval = fs))
+}
+
+broyden3<-function (Ffun, x0,J0 = NULL, ..., maxiter = 100, tol = .Machine$double.eps^(1/2)) 
+{
+  if (!is.numeric(x0)) 
+    stop("Argument 'x0' must be a numeric (row or column) vector.")
+  fun <- match.fun(Ffun)
+  F <- function(x) fun(x, ...)
+  y0 <- F(x0)
+  if (length(x0) != length(y0)) 
+    stop("Function 'F' must be 'square', i.e. from R^n to R^n .")
+  if (length(x0) == 1) 
+    stop("Function 'F' must not be a univariate function.")
+  if (is.null(J0)) {
+    A0 <- jacobian(F, x0)
+  }
+  else {
+    A0 <- J0
+  }
+  B0 <- inv(A0)
+  if (any(is.infinite(B0))) 
+    B0 <- diag(length(x0))
+  xnew <- x0 - B0 %*% y0
+  #
+  if (xnew[1]<0){xnew <- x0/2}
+  #
+  ynew <- F(xnew)
+  k <- 1
+  while (k < maxiter) {
+    s <- xnew - x0
+    d <- ynew - y0
+    if (norm(s, "F") < tol || norm(as.matrix(ynew), "F") < 
+        tol) 
+      break
+    B0 <- B0 + (s - B0 %*% d) %*% t(s) %*% B0/c(t(s) %*% 
+                                                  B0 %*% d)
+    x0 <- xnew
+    a <- xnew - B0 %*% ynew
+    if(isTRUE(a[1] > 0))
+    {xnew <- a}
+    else{
+      xnew <- x0/2
+      #xnew[1]<-x0/2
+      #xnew[2] <- xnew[2] - B0[2] %*% ynew[2]
+    }
+    y0 <- ynew
+    ynew <- F(xnew)
+    k <- k + 1
+  }
+  if (k >= maxiter) 
+    warning(paste("Not converged: Max number of iterations reached."))
+  fnew <- sqrt(sum(ynew^2))
+  return(list(zero = c(xnew), fnorm = fnew, niter = k))
+}
+
 weibullGMMestim3 <- function(matp12,matp13,truevalues=NULL){
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
@@ -562,21 +651,104 @@ weibullGMMestim3 <- function(matp12,matp13,truevalues=NULL){
   return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
 }
 
-J12 <- function(x,vecx){jacobianFunctiong12(x[1],x[2],vecx)[1]
-}
-
 library(pracma)
 
-data <- simulWclass(m=20,n=20,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
-tt <- seq.int(20)/20
-matp<-GZestimation(data$matX,data$matZ,tt,tt,0.11,kern=dEpan) 
+# errors: we observe sometimes two type of errors. 
+# error 1: when n is very big (1000) , k gets negative -> non-finite function value
+# error 2: when n is little (20 or 30) -> Error in norm(s, "F") : 'A' must be a numeric matrix 
 
-# pas de parametre phat en fsolve()
-thetahat2<-weibullGMMestim2 (matp$matp12,matp$matp13,truevalues=NULL)
 
-#xnew<-x0/2
-thetahat<-weibullGMMestim3 (matp$matp12,matp$matp13,truevalues=NULL)
+####### Optisation approcah, using quasi-Newton methods (BFGS and L-BFGS-B)
+
+fg1<- function (theta,vecx) crossprod(functiong(theta,vecx)) #elle marche
+# fg2 <- function (theta){fg1(theta,vecx=phat)} # necessary when adding 
+
+# Gradfg <- t(JX)%*%(functiong(theta,phat)[[1]]) + crossprod(fg,JX) not ready
+
+# choice of method
+EOptimweibull <- optim(c(0.7, 1.3),fg1,method="BFGS",phat=c(0.86, 0.79))
+
+EOptimweibull <- optim(c(0.7, 1.3),fg1,method="L-BFGS-B",phat=c(0.86, 0.79),lower = 0.001)
+
+# weibullGMMestim4 estimates lambda_t, k_t using the optimisation method of choice
+
+weibullGMMestim4 <- function(matp12,matp13,truevalues=NULL){
+  matp12 <- as.matrix(matp12)
+  matp13 <- as.matrix(matp13)
+  Nligne <- dim(matp12)[1]
+  Ncol <- dim(matp12)[2] 
+  lambdahat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  khat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  if ( is.null(truevalues) ){
+    startvalueslambd <- matrix(1,nrow=Nligne,ncol=Ncol)
+    startvaluesk <- matrix(1,nrow=Nligne,ncol=Ncol)
+  } else {
+    startvalues <- truevalues
+  }
+  for (j in 1:Ncol){
+    p12hat = matp12[,j]
+    p13hat = matp13[,j]
+    
+    lambdahat.vec = lambdahat.mat[,j]
+    khat.vec = khat.mat[,j]
+    
+    startvalueslambd.vec <- startvalueslambd[,j]
+    startvaluesk.vec <- startvaluesk[,j]
+    
+    for (i in 1:Nligne){
+      cat("\n",i,"eme ligne :")
+      p12hat_t=p12hat[i]
+      p13hat_t=p13hat[i]
+      phat=c(p12hat_t,p13hat_t)
+      
+      startvalueslambd_t=startvalueslambd.vec[i]
+      startvaluesk_t=startvaluesk.vec[i]
+      startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
+      EGMMweibull <- optim(par=startval_t,fn=fg1,method="L-BFGS-B",vecx=phat,lower = 0.001
+      )
+      #EGMMweibull <- optim(par=startval_t,fn=fg1,method="BFGS",vecx=phat
+      #)
+      
+      lambdahat.vec[i] <- EGMMweibull$par[1]
+      khat.vec[i] <- EGMMweibull$par[2] 
+    }
+    lambdahat.mat[,j] <- lambdahat.vec
+    khat.mat[,j] <- khat.vec
+  }   
+  return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
+}
+
+####### Computation of p1r_t, far_t using {lambda_t,k_t}
+
+p1rfarW_temps<- function(lam.mat,k.mat,r.mat,lowerbnd=10^(-5)){
+
+  n = dim(lam.mat)[1]
+  N = dim(lam.mat)[2]
+  p1r.mat = matrix(0,n,N)
   
+  for (j in 1:N){#  for each trajectory
+    
+    lam.vec = lam.mat[,j]
+    k.vec = k.mat[,j]
+    r.vec = r.mat[,j]
+    
+    p1r.vec = p1r.mat[,j]
+    
+    for (i in 1:n){ # for each t in the trajectory
+      
+    
+      p1r_t <- laplaceWeibull(r.vec[i]-1,lam.vec[i],k.vec[i],lowerbnd=lowerbnd)
+      
+      p1r.vec[i] = p1r_t
+    }
+    
+    p1r.mat[,j] <- p1r.vec
+  }  
+  
+  far.mat <- 1 - 1 / (r.mat * p1r.mat)
+  return( list("p1r"=p1r.mat,"far"=far.mat) )
+}
+
 #################### Observation of distributions in time #########################
 
 # test ( just for Gumbel, X stationary, Z non-sationary with linear growth in location parameter)
@@ -669,4 +841,12 @@ plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ
 plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.05,ksiZ=-0.05,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
 plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
   
+##############  Statistiques tests for tre transfomation fonction f(W(lambda,k))->W(1,1) ######
+
+# N trajectories of Weibull sample of size n and parameters lambda,k
+k=0.8
+lambda= 0.2
+rweibull(20,k,lambda)
+
+
 
