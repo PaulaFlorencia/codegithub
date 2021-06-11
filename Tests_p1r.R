@@ -49,7 +49,8 @@ tt <- seq.int(20)/20
 matp<-GZestimation(data$matX,data$matZ,tt,tt,11,kern=dEpan) 
 theta<-weibullGMMestim(matp$matp12,matp$matp13,truevalues=NULL)
 theta3<-weibullGMMestim3(matp$matp12,matp$matp13,truevalues=NULL) # ... lam= 336.1192 ,k= -2826.279 error...
-  
+# also lam= 0.2871943 ,k= 1.36206 
+
 ###############(B) Optim() ####################################
 
 # B.0
@@ -98,8 +99,9 @@ matp<-GZestimation(X,Z,tt,tt,0.11,kern=dEpan)
 thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
 rvalues <- seq(5,30,by=5)
 
-p1rfar1<-p1rfarW(rep(thetahat$lambdahat[1],6),rep(thetahat$khat[1],6),rvalues)
+p1rfar1<-p1rfarW(rep(thetahat$lambdahat[1],6),rep(thetahat$khat[1],6),rvalues) # t1 and sequence of r
 p1rfarestim <- p1rfarW(thetahat$lambdahat,thetahat$khat,matrix(10,ncol=2,nrow=1000))
+# r=10 for all t.vec. Here we can see that here we are taking in consideration time
 
 p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(4,ncol=1,nrow=size))
 plot(p1rfar$p1r)
@@ -161,12 +163,12 @@ plot(tt,p1r_t_theo,type="l",col="red")
 lines(tt,p1rfar$p1r)
 
 
-# 2. for multiple trayactories {(X)t,(Z)t}
+# 2. for multiple trajectories {(X)t,(Z)t}
 
-## not working yet
-FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec){
+# Both Gumbel and linear trend un muz. We know two Gumbel have the same support
+FastTestforp1r_gev <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec){
   
-  theta_theo <- 1 / exp(muz.vec)
+  theta_theo <- 1 / exp(muZ.vec)
   p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
   
   matX <- matrix(nrow=m,ncol=N)
@@ -174,10 +176,65 @@ FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
   matp <- matrix(nrow=n,ncol=N)
   
   for (j in 1:N){
-    natX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
+    matX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
     matZ[,j] <- rgev(n, loc = muZ.vec, scale = sigZ.vec, shape = 0)
-    matp[,j]<-GZestimation(matX[,j],matX[,j],tt,tt,h,kern=dEpan)
   }
+  matp<-GZestimation(matX,matZ,tt,tt,h,kern=dEpan)
+  
+  thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
+  p1r_mean <- rowMeans(p1rfar$p1r)
+  
+  plot(tt,p1r_t_theo,type="l",col="red",xlab="time",ylab="p1r_t", main=paste("evolution over time of p1r with r=",r))
+  lines(tt,p1r_mean)
+  for (i in 1:N){
+    lines(tt,p1rfar$p1r[,i],col="gray")
+  }
+  return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean, "p1rmean"=p1r_mean))
+}
+
+size <-  20
+tt <- seq.int(size)/size
+muz = 2 + seq(0, 5, length.out = size)
+mux = 0
+sigmax = 1
+sigmaz = 1
+testmoyen<-FastTestforp1r_gumbel(tt,0.11,5,20,20,10,rep(sigmax,size),rep(sigmaz,size),rep(mux,size),muz)
+testmoyen<-FastTestforp1r_gumbel(tt,0.11,5,20*2,20,10,rep(sigmax,size*2),rep(sigmaz,size),rep(mux,size*2),muz)
+
+plot(tt,testmoyen$matp1r[,1], type="l")
+
+# 3. Fonction similar two (2.) but for a type of Frechet, in this case the trajectories are not necessay W-class
+
+
+size <-  20
+rp <- 50
+tt <- seq.int(size)/size
+sigma <- seq(1, 2, length.out = size)
+xi = 0.5
+x = rgev(size * 1/4, loc = 1, scale = xi, shape = xi)
+z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi)
+theta_theo <- sigma^(-1 / xi)
+p12_theo <- 1 / (1 + theta_theo)
+G_theo <- function(z) pgev(z, loc = 1, scale = xi, shape = xi)
+far_theo_rp <- (1 - theta_theo) * (1 - 1/rp)
+
+testmoyen<-FastTestforp1r_gumbel(tt,0.5,5,size*2,size,10,rep(xi,size*2),sigma,rep(1,size*2),sigma)
+
+FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi.vec,sigma.vec,muX.vec,muZ.vec){
+  
+  theta_theo <- sigma.vec^(-1 / xi.vec)
+  p12_theo <- 1 / (1 + theta_theo)
+  
+  matX <- matrix(nrow=m,ncol=N)
+  matZ <- matrix(nrow=n,ncol=N)
+  matp <- matrix(nrow=n,ncol=N)
+  
+  for (j in 1:N){
+    matX[,j] <- rgev(m, loc = muX.vec, scale = xi.vec, shape = xi.vec)
+    matZ[,j] <- rgev(n, loc = muZ.vec, scale = xi.vec*muZ.vec, shape = xi.vec)
+  }
+  matp<-GZestimation(matX,matZ,tt,tt,h,kern=dEpan)
   
   thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
   p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
@@ -185,8 +242,11 @@ FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
   
   plot(tt,p1r_t_theo,type="l",col="red")
   lines(tt,p1r_mean)
-  
-  return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean))
+  for (i in 1:N){
+    lines(tt,p1rfar$p1r[,i],col="gray")
+  }
+  return(list("matp1r"=p1rfar$p1r,"matfar"=p1rfar$far,"p1rmean"=p1r_mean))
 }
 
-testmoyen<-FastTestforp1r_gumbel(tt,0.11,5,size,size,4,rep(sigx,size),rep(sigz,size),rep(mux,size),muz)
+
+
