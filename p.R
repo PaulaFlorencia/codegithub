@@ -257,7 +257,7 @@ hchoix_f
 # Computation of vector of errors
 
 h_seq<-seq(from=0.01, to=1,by=0.02)
-
+h_seq <-seq(from=0.1,to=1, by=0.1)
 size <-  250 * 4
 tt <- seq.int(size)/size
 t_eval <- seq.int(size)/size
@@ -280,7 +280,7 @@ CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
   }
   return(CV_err_h) #vector of errors
 }
-error_vector<-CV_error(X,Z,tt,t_eval,h_seq,kern= dEpan)
+error_vector<-CV_error(x,z,tt,tt,h_seq,kern= dEpan)
 
 # Error plot 
 plot(x=h_seq, y=error_vector, type="b", lwd=3, col="blue",
@@ -661,14 +661,10 @@ library(pracma)
 ####### Optisation approcah, using quasi-Newton methods (BFGS and L-BFGS-B)
 
 fg1<- function (theta,vecx) crossprod(functiong(theta,vecx)) #elle marche
-# fg2 <- function (theta){fg1(theta,vecx=phat)} # necessary when adding 
+fg2 <- function (theta){fg1(theta,vecx=phat)} # necessary when adding 
 
 # Gradfg <- t(JX)%*%(functiong(theta,phat)[[1]]) + crossprod(fg,JX) not ready
 
-# choice of method
-EOptimweibull <- optim(c(0.7, 1.3),fg1,method="BFGS",phat=c(0.86, 0.79))
-
-EOptimweibull <- optim(c(0.7, 1.3),fg1,method="L-BFGS-B",phat=c(0.86, 0.79),lower = 0.001)
 
 # weibullGMMestim4 estimates lambda_t, k_t using the optimisation method of choice
 
