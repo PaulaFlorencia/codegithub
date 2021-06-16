@@ -409,7 +409,7 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
 
 # Estimate p12t and p13t for each trajectory {(X)t,(Z)t}
 
-GZestimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
+P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   
   matX <- as.matrix(matX)
   matZ <- as.matrix(matZ) 
@@ -775,6 +775,94 @@ FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
   return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean, "p1rmean"=p1r_mean))
 }
 
+#### 3.  gmm() approach
+
+library(gmm)
+
+matGZ_func<- function(matX,matZ){
+  
+  matX <- as.matrix(matX)
+  matZ <- as.matrix(matZ) 
+  dimnsZ=dim(matZ)
+  matGm <- matrix(rep(0,prod(dimnsZ)),nrow=dimnsZ[1],ncol=dimnsZ[2])
+  for (j in 1:dimnsZ[2]){
+    X <- matX[,j]
+    Z <- matZ[,j]
+    G_empirique<-ecdf(X) 
+    matGm[,j] <- G_empirique(Z)
+  }
+  return(matGm)
+}
+
+weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){
+  matGm <- as.matrix(matGm)
+  Nligne <- dim(matGm)[1] 
+  Ncol <- dim(matGm)[2]
+  lambdahat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  khat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  
+  if ( is.null(truevalues) ){
+    startvalueslambd <- matrix(1,nrow=Nligne,ncol=Ncol)
+    startvaluesk <- matrix(1,nrow=Nligne,ncol=Ncol)
+  } else {
+    startvalueslambd <- truevalues[[1]] # truevalues doit être une liste avec deux matrices nxN
+    startvaluesk <- truevalues[[2]]
+  }
+  for (j in 1:Ncol){
+    Gnhat = matGm[,j]
+    
+    lambdahat.vec = lambdahat.mat[,j]
+    khat.vec = khat.mat[,j]
+    
+    startvalueslambd.vec <- startvalueslambd[,j]
+    startvaluesk.vec <- startvaluesk[,j]
+    
+    for (i in 1:Nligne){
+      
+      startvalueslambd_t=startvalueslambd.vec[i]
+      startvaluesk_t=startvaluesk.vec[i]
+      startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
+      
+      fg_noyaux <- function(theta,vecx){function_gmm_noyaux(theta,vecx,i=i,tt=tt,t_eval=t_eval,h=h)}
+      
+      EGMMweibull_NonStationary <- gmm(g=fg_noyaux,
+                                       x=Gnhat,
+                                       t0=startval_t,
+                                       optfct="nlminb",
+                                       lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
+                                       onlyCoefficients = TRUE
+      )
+      
+      lambdahat.vec[i] <- EGMMweibull_NonStationary$coefficients[1]
+      khat.vec[i] <- EGMMweibull_NonStationary$coefficients[2] 
+    }
+    lambdahat.mat[,j] <- lambdahat.vec
+    khat.mat[,j] <- khat.vec
+  }   
+  return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
+  
+}
+
+
+function_gmm_noyaux<-function(theta,vecx,i,tt,t_eval,h,kern= dEpan){
+  point_eval=t_eval[i]
+  lambdaval=theta[1]; kval=theta[2]
+  
+  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  
+  Kij_ti <- outer(point_eval,tt,function(zz,z)dEpan(zz-z)/h)
+  Kij_ti <- t(Kij_ti)
+  W <- Kij_ti/sum(Kij_ti)
+  
+  p12_nonMoyenne <- W*vecx
+  p12_nonMoyenne <- as.vector (p12_nonMoyenne)
+  p13_nonMoyenne <- W*(vecx)^2
+  p13_nonMoyenne <- as.vector (p13_nonMoyenne)
+  
+  M <- cbind( p12_nonMoyenne - p12val ,  p13_nonMoyenne - p13val )
+  return(M)
+}
 
 #################### Observation of distributions in time #########################
 
