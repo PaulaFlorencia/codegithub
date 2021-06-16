@@ -47,7 +47,7 @@ EGMMweibul3 <- fsolve3(fg,x0=startval_t)
 # A.1 Computation of lambda_t, k_t for each time. X,Z stationary
 data <- simulWclass(m=100,n=100,N=2,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
 tt <- seq.int(100)/100
-matp<-GZestimation(data$matX,data$matZ,tt,tt,11,kern=dEpan) 
+matp<-P12_P13_estimation(data$matX,data$matZ,tt,tt,11,kern=dEpan) 
 theta<-weibullGMMestim(matp$matp12,matp$matp13,truevalues=NULL)
 theta3<-weibullGMMestim3(matp$matp12,matp$matp13,truevalues=NULL) # ... lam= 336.1192 ,k= -2826.279 error...
 # also lam= 0.2871943 ,k= 1.36206 
@@ -81,7 +81,7 @@ EOptimweibull <- optim(c(0.5, 0.8),fg1,method="L-BFGS-B",vecx=c(0.86, 0.79),lowe
 
 data <- simulWclass(m=20,n=20,N=2,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
 tt <- seq.int(20)/20
-matp<-GZestimation(data$matX,data$matZ,tt,tt,0.1,kern=dEpan) 
+matp<-P12_P13_estimation(data$matX,data$matZ,tt,tt,0.1,kern=dEpan) 
 plot(tt,matp$matp13[,1],xlab="t",ylab="p12_hat")
 
 thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
@@ -102,7 +102,7 @@ tt <- seq.int(size)/size
 mu = 2 + seq(0, 5, length.out = size) 
 X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
 Z = rgev(size, loc = mu, scale = 1, shape = 0)
-matp<-GZestimation(X,Z,tt,tt,0.11,kern=dEpan)
+matp<-P12_P13_estimation(X,Z,tt,tt,0.11,kern=dEpan)
 #plot(tt,matp$matp13,type="l", col="blue")
 #lines(tt,matp$matp12,type="l")
 thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
@@ -143,7 +143,7 @@ p12_t_theo <- 1 / (1 + theta_theo);cat("Thoretic values of p12_t: ", p12_t_theo 
 p13_t_theo <- 1 / (1 + 2*theta_theo); cat("Thoretic values of p13_t: ", p13_t_theo  )
 p1r_t_theo <- 1 / (1 + (r-1)*theta_theo); cat("Thoretic values of p1r_t: ", p1r_t_theo  )
 # 4. p12hat and p13hat
-matp<-GZestimation(X,Z,tt,tt,0.11,kern=dEpan)
+matp<-P12_P13_estimation(X,Z,tt,tt,0.11,kern=dEpan)
 p12hat_t<-matp$matp12; cat("Estimated values of p12_t: ", p12hat_t  )
 p13hat_t<-matp$matp13; cat("Estimated values of p3r_t: ", p13hat_t  )
 err_p12 <- abs(p12_t_theo - p12hat_t); cat("dif p12: ", err_p12  )
@@ -221,7 +221,7 @@ FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
     matX[,j] <- rgev(m, loc = muX.vec, scale = rep(xi,m), shape = xi)
     matZ[,j] <- rgev(n, loc = sigma.vec, scale = rep(xi,n)*sigma.vec, shape =xi)
   }
-  matp<-GZestimation(matX,matZ,tt,tt,h,kern=dEpan)
+  matp<-P12_P13_estimation(matX,matZ,tt,tt,h,kern=dEpan)
   
   thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
   p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
@@ -263,3 +263,20 @@ Z3 = rgev(size, loc = muZ_t[3], scale = sigZ_t[3], shape = 0.25)
 lines(density(Z3),col="blue")
 Z4 = rgev(size, loc = muZ_t[4], scale = sigZ_t[4], shape = 0.25)
 lines(density(Z4),col="purple")
+
+
+###################### lambdahat_t and khat_t using gmm ###################
+
+size <- 20
+tt <- seq.int(size)/size
+mu = 2 + seq(0, 5, length.out = size) 
+X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
+Z = rgev(size, loc = mu, scale = 1, shape = 0)
+
+h=0.11
+
+G_empirique<-ecdf(X) 
+matGm <- G_empirique(Z)
+
+weibullGMM_NonStationaire(matGm, tt, tt, h, kern=dEpan, truevalues=NULL)
+# output: matrix lambdahat and khat
