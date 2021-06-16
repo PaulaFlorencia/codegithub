@@ -745,6 +745,37 @@ p1rfarW_temps<- function(lam.mat,k.mat,r.mat,lowerbnd=10^(-5)){
   return( list("p1r"=p1r.mat,"far"=far.mat) )
 }
 
+# 2. Apply optim method for multiple trajectories {(X)t,(Z)t}
+
+# Both Gumbel and linear trend un muz. We know two Gumbel have the same support
+FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec){
+  
+  theta_theo <- 1 / exp(muZ.vec)
+  p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+  
+  matX <- matrix(nrow=m,ncol=N)
+  matZ <- matrix(nrow=n,ncol=N)
+  matp <- matrix(nrow=n,ncol=N)
+  
+  for (j in 1:N){
+    matX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
+    matZ[,j] <- rgev(n, loc = muZ.vec, scale = sigZ.vec, shape = 0)
+  }
+  matp<-GZestimation(matX,matZ,tt,tt,h,kern=dEpan)
+  
+  thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
+  p1r_mean <- rowMeans(p1rfar$p1r)
+  
+  plot(tt,p1r_t_theo,type="l",col="red",xlab="time",ylab="p1r_t", main=paste("evolution over time of p1r with r=",r))
+  lines(tt,p1r_mean)
+  for (i in 1:N){
+    lines(tt,p1rfar$p1r[,i],col="gray")
+  }
+  return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean, "p1rmean"=p1r_mean))
+}
+
+
 #################### Observation of distributions in time #########################
 
 # test ( just for Gumbel, X stationary, Z non-sationary with linear growth in location parameter)
@@ -768,44 +799,63 @@ plotd_time(n,0,mu,1,0.2)
 
 ########################### Simulate W-class trajectories with non-sationnary Z #################
 
-simulWclass_trend <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,supportauto=TRUE,muX=0,muZ=0,sigZ=0,graph=TRUE){
-
-  if (sigZ == 0) { sigZ = sigX } 
-  muZ <- matrix(nrow=n,ncol=N)
-  if (supportauto == TRUE){ 
-    for (i in 1:n){
-      muZ[i] <- muX + sigZ/ksiZ - sigX/ksiX - b.vec[i]*tt.vec[i]}
-    }
+## we chose to fix muZ or sigmaZ
+simulWclass_nonStationnary <-function(m,n,N,ksiX,ksiZ,sigX,muX=0,muZ=0,sigZ=0,unknownMu=TRUE){
   
-  matX <- matrix(nrow=m,ncol=N) 
-  matZ <- matrix(nrow=n,ncol=N) 
+  ## This fonction must recive shapes paremeter of the same sign and different from zero
+  ## between muZ and sigZ, only one must be an imput of the fonction and it will help us find the other one
+  ## unknowkMu=TRUE says us that muZ is the unknowm parameter by default. unknown=FALSE means sigZ is now the unknown parameter
+  ## between muZ and sigZ one must be 0 and the other one a vector
+  ## muX=0 by default but it can be modified
   
-  for (j in 1:N){
-    matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
-    matZ[,j] = (muZ+b.vec*tt.vec) + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
-    }
-  
-  if (graph==TRUE){
-    plot(density(matX[,1]),
-         main="Kernel density estimates \nfor the first X sample (black, counterfactual),\n and the first Z sample (red, factual)",
-         cex.main=0.8,
-         xlim=c(-4,12))
-    lines(density(matZ[,1]),col="red")
+  if (sign(ksiX)!=sign(ksiZ)){
+    stop("X and Z can not be W-class, shape parameters must have the same sign")
   }
-  return(list("matX"=matX,
-              "matZ"=matZ,
-              "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
-              "k"=ksiX/ksiZ) 
-  )  
+  
+  if (ksiX==0|ksiZ==0){
+    stop(" trayectories with shape parameter equal to 0 are always W-class. This case is not treated in this fonction")
+   
+  }
+  support <- muX - sigX/ksiX
+  if (unknownMu==FALSE){
+    if (sigZ!=0){stop("Scale parameter of Z must be unknown")}
+    muZ.vec <- muZ
+    sigZ.vec <- rep(sigZ,n)
+    for (i in 1:n){
+      sigZ.vec[i] <- (support - muZ.vec[i])*(-ksiZ)
+    }
+  }
+  if (unknownMu ==TRUE){
+    if (muZ!=0){stop("Location parameter of Z must be unknown")}
+    sigZ.vec <- sigZ
+    muZ.vec <- rep(muX,n)
+    for (i in 1:n){
+      muZ.vec[i] <- support + sigZ.vec[i]/ksiZ
+    }
+  }
+  matX=matrix(0,nrow=m,ncol=N)
+  matZ=matrix(0,nrow=n,ncol=N)
+  for(j in 1:N){
+    matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
+    matZ[,j] <-rgev(n, loc=muZ.vec, scale=sigZ.vec, shape=ksiZ)
+  }
+  return (list("matX"=matX,
+               "matZ"=matZ,
+               "lam"=((sigX/ksiX)/(sigZ.vec/ksiZ))^(1/ksiX),
+               "k"=ksiX/ksiZ,"mu_Z"=muZ.vec,"sigma_Z"=sigZ.vec))
 }
 
-b=rep(1,1000)
-tt <- seq.int(1000)/1000
-data<-simulWclass_trend(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
+size=20
+sigma <- seq(1, 3, length.out = size)
+simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=1,ksiZ=1.2,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
+
+simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0,ksiZ=0,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
 
 
+##########################3
 # W-class distributions in time
 
+# Fonction no longuer useful, it must be modified
 plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ=0){
   
   if (sigZ == 0) { sigZ = sigX } 
@@ -833,7 +883,8 @@ plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ
   }
   
 }
-
+b=0.5
+tt <- seq.int(1000)/1000
 plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.05,ksiZ=-0.05,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
 plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
   
