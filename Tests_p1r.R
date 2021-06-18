@@ -279,8 +279,14 @@ h=0.11
 
 GZ<-matGZ_func(X,Z)
 
-param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
-# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061
+## Starting from lambda_(t-1), k_(t-1) at each t>1 save us time : 
+system.time(param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))#lam= 0.002590114 ,k= 1.304888  
+# system tye: 3.055 s
+
+system.time(param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))
+# system time: 14.580 s
+# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061, lam= 0.001947633 ,k= 0.7214428 
+
 p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
 
 
@@ -310,7 +316,7 @@ p1r_opt<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size))
 # theo
 theta_theo <- 1 / exp(mu)
 p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
-screen(1) # change for 2,3,4
+screen(4) # change for 2,3,4
 plot(tt,p1r_t_theo,col="red",type="l")
 lines(tt,p1r_gmm$p1r,col="green")
 lines(tt,p1r_opt$p1r,col="blue")
@@ -334,4 +340,32 @@ plot(tt,p1r_t_theo,col="red",type="l")
 lines(tt,plotoptim$p1r_mean, col="blue")
 lines(tt,plotgmm$p1r_mean,col="green")
 
+###################### Exemples with frechet
+################################### not ready
+split.screen(c(2,2))
+size <-  200
+tt <- seq.int(size)/size
+sigma <- seq(1, 2, length.out = size)
+xi = 0.5
+x = rgev(size * 1/4, loc = 1, scale = xi, shape = xi)
+z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi)
+r=10
+h=0.2
+
+GZ <-matGZ_func(x,z)
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+# for last t : lam= 0.2251242 ,k= 0.9904941 
+p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
+# Optim
+matp<-P12_P13_estimation(x,z,tt,tt,h,kern=dEpan)
+thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL) # for last t:lam= 0.2251274 ,k= 0.9895834  
+p1r_opt<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size))
+# theo
+theta_theo <- sigma^(-1 / xi)
+p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+
+screen(1) # change for 2,3,4
+plot(tt,p1r_t_theo,col="red",type="l")
+lines(tt,p1r_gmm$p1r,col="green")
+lines(tt,p1r_opt$p1r,col="blue")
 
