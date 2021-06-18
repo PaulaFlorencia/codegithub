@@ -419,8 +419,8 @@ P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   for (j in 1:dimnsZ[2]){
     X <- matX[,j]
     Z <- matZ[,j]
-    matp12[,j] <- p12_NonPar(X,Z,tt,t_eval,h,kern= dEpan)
-    matp13[,j] <- p13_NonPar(X,Z,tt,t_eval,h,kern= dEpan)
+    matp12[,j] <- p12_NonPar(X,Z,tt,t_eval,h,kern)
+    matp13[,j] <- p13_NonPar(X,Z,tt,t_eval,h,kern)
   }
   return(list("matp12"=matp12,"matp13"=matp13))
 }
@@ -700,7 +700,7 @@ weibullGMMestim4 <- function(matp12,matp13,truevalues=NULL){
       startvalueslambd_t=startvalueslambd.vec[i]
       startvaluesk_t=startvaluesk.vec[i]
       startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
-      EGMMweibull <- optim(par=startval_t,fn=fg1,method="L-BFGS-B",vecx=phat,lower = 0.001
+      EGMMweibull <- optim(par=startval_t,fn=fg1,method="L-BFGS-B",vecx=phat,lower = 10^(-5)
       )
       #EGMMweibull <- optim(par=startval_t,fn=fg1,method="BFGS",vecx=phat
       #)
@@ -748,7 +748,7 @@ p1rfarW_temps<- function(lam.mat,k.mat,r.mat,lowerbnd=10^(-5)){
 # 2. Apply optim method for multiple trajectories {(X)t,(Z)t}
 
 # Both Gumbel and linear trend un muz. We know two Gumbel have the same support
-FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec){
+FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec,methode="optim"){
   
   theta_theo <- 1 / exp(muZ.vec)
   p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
@@ -761,9 +761,17 @@ FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
     matX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
     matZ[,j] <- rgev(n, loc = muZ.vec, scale = sigZ.vec, shape = 0)
   }
-  matp<-GZestimation(matX,matZ,tt,tt,h,kern=dEpan)
   
-  thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  if (methode=="optim"){
+    matp<-P12_P13_estimation(matX,matZ,tt,tt,h,kern=dEpan)
+    thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  }
+  
+  if (methode=="gmm"){
+    GZ<-matGZ_func(matX,matZ)
+    thetahat<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+  }
+  
   p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
   p1r_mean <- rowMeans(p1rfar$p1r)
   
@@ -784,7 +792,7 @@ matGZ_func<- function(matX,matZ){
   matX <- as.matrix(matX)
   matZ <- as.matrix(matZ) 
   dimnsZ=dim(matZ)
-  matGm <- matrix(rep(0,prod(dimnsZ)),nrow=dimnsZ[1],ncol=dimnsZ[2])
+  matGm <- matrix(nrow=dimnsZ[1],ncol=dimnsZ[2])
   for (j in 1:dimnsZ[2]){
     X <- matX[,j]
     Z <- matZ[,j]
@@ -794,7 +802,7 @@ matGZ_func<- function(matX,matZ){
   return(matGm)
 }
 
-weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){
+weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){ # ... also possible
   matGm <- as.matrix(matGm)
   Nligne <- dim(matGm)[1] 
   Ncol <- dim(matGm)[2]
@@ -823,7 +831,7 @@ weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalu
       startvaluesk_t=startvaluesk.vec[i]
       startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
       
-      fg_noyaux <- function(theta,vecx){function_gmm_noyaux(theta,vecx,i=i,tt=tt,t_eval=t_eval,h=h)}
+      fg_noyaux <- function(theta,vecx){function_gmm_noyaux(theta,vecx,index=i,tt.vec=tt,t_eval.vec=t_eval,bandwidth=h)}
       
       EGMMweibull_NonStationary <- gmm(g=fg_noyaux,
                                        x=Gnhat,
@@ -843,15 +851,15 @@ weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalu
   
 }
 
-
-function_gmm_noyaux<-function(theta,vecx,i,tt,t_eval,h,kern= dEpan){
-  point_eval=t_eval[i]
+# utiliser lambda_(t-1) , k_(t-1) come val initial pour t 
+function_gmm_noyaux<-function(theta,vecx,index,tt.vec,t_eval.vec,bandwidth,kern=dEpan){
+  point_eval=t_eval.vec[index]
   lambdaval=theta[1]; kval=theta[2]
   
   p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
   p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
   
-  Kij_ti <- outer(point_eval,tt,function(zz,z)dEpan(zz-z)/h)
+  Kij_ti <- outer(point_eval,tt.vec,function(zz,z)dEpan((zz-z)/bandwidth))
   Kij_ti <- t(Kij_ti)
   W <- Kij_ti/sum(Kij_ti)
   
@@ -860,7 +868,7 @@ function_gmm_noyaux<-function(theta,vecx,i,tt,t_eval,h,kern= dEpan){
   p13_nonMoyenne <- W*(vecx)^2
   p13_nonMoyenne <- as.vector (p13_nonMoyenne)
   
-  M <- cbind( p12_nonMoyenne - p12val ,  p13_nonMoyenne - p13val )
+  M <- cbind( length(vecx)*p12_nonMoyenne - p12val ,  length(vecx)*p13_nonMoyenne - p13val )
   return(M)
 }
 
@@ -888,13 +896,16 @@ plotd_time(n,0,mu,1,0.2)
 ########################### Simulate W-class trajectories with non-sationnary Z #################
 
 ## we chose to fix muZ or sigmaZ
-simulWclass_nonStationnary <-function(m,n,N,ksiX,ksiZ,sigX,muX=0,muZ=0,sigZ=0,unknownMu=TRUE){
+simulWclass_nonStationnary <-function(m,n,N,ksiX,ksiZ,sigX,muX=0,muZ=0,sigZ=0,unknownMu=TRUE){#sigZ=NA
   
   ## This fonction must recive shapes paremeter of the same sign and different from zero
   ## between muZ and sigZ, only one must be an imput of the fonction and it will help us find the other one
   ## unknowkMu=TRUE says us that muZ is the unknowm parameter by default. unknown=FALSE means sigZ is now the unknown parameter
   ## between muZ and sigZ one must be 0 and the other one a vector
   ## muX=0 by default but it can be modified
+  
+  # argument a montre quand on fait help
+  # pas m,n comme parametre
   
   if (sign(ksiX)!=sign(ksiZ)){
     stop("X and Z can not be W-class, shape parameters must have the same sign")
@@ -933,11 +944,12 @@ simulWclass_nonStationnary <-function(m,n,N,ksiX,ksiZ,sigX,muX=0,muZ=0,sigZ=0,un
                "k"=ksiX/ksiZ,"mu_Z"=muZ.vec,"sigma_Z"=sigZ.vec))
 }
 
-size=20
+size=200
 sigma <- seq(1, 3, length.out = size)
+tt <- seq.int(size)/size
 simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=1,ksiZ=1.2,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
 
-simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0,ksiZ=0,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
+simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.20,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) # better for visualisation
 
 
 ##########################3
