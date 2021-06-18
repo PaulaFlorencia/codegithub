@@ -802,7 +802,60 @@ matGZ_func<- function(matX,matZ){
   return(matGm)
 }
 
+# Using the previus calculated lambda and k as start values
 weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){ # ... also possible
+  matGm <- as.matrix(matGm)
+  Nligne <- dim(matGm)[1] 
+  Ncol <- dim(matGm)[2]
+  lambdahat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  khat.mat <- matrix(nrow=Nligne,ncol=Ncol)
+  
+  if ( is.null(truevalues) ){
+    startvalueslambd <- 1
+    startvaluesk <- 1
+  } else {
+    startvalueslambd <- truevalues[1] # truevalues is a vector c(1,1)
+    startvaluesk <- truevalues[2]
+  }
+  for (j in 1:Ncol){
+    Gnhat = matGm[,j]
+    
+    lambdahat.vec = lambdahat.mat[,j]
+    khat.vec = khat.mat[,j]
+    
+    startvalueslambd_t <- startvalueslambd 
+    startvaluesk_t<- startvaluesk
+    
+    for (i in 1:Nligne){
+      
+      startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
+      
+      fg_noyaux <- function(theta,vecx){function_gmm_noyaux(theta,vecx,index=i,tt.vec=tt,t_eval.vec=t_eval,bandwidth=h)}
+      
+      EGMMweibull_NonStationary <- gmm(g=fg_noyaux,
+                                       x=Gnhat,
+                                       t0=startval_t,
+                                       optfct="nlminb",
+                                       lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
+                                       onlyCoefficients = TRUE
+      )
+      
+      lambdahat.vec[i] <- EGMMweibull_NonStationary$coefficients[1]
+      khat.vec[i] <- EGMMweibull_NonStationary$coefficients[2] 
+      
+      startvalueslambd_t <- lambdahat.vec[i]
+      startvaluesk_t <- khat.vec[i]
+      
+    }
+    lambdahat.mat[,j] <- lambdahat.vec
+    khat.mat[,j] <- khat.vec
+  }   
+  return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
+  
+}
+
+#Starting de algorthim at (1,1), or another given value, at each time
+weibullGMM_NonStationaire_startval_1 <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){ # ... also possible
   matGm <- as.matrix(matGm)
   Nligne <- dim(matGm)[1] 
   Ncol <- dim(matGm)[2]
