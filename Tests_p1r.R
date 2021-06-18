@@ -79,12 +79,12 @@ EOptimweibull <- optim(c(0.5, 0.8),fg1,method="L-BFGS-B",vecx=c(0.86, 0.79),lowe
 # B.1
 ## computation of lambda_t, k_t for each time. X,Z stationary 
 
-data <- simulWclass(m=20,n=20,N=2,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
+data <- simulWclass(m=20,n=20,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
 tt <- seq.int(20)/20
 matp<-P12_P13_estimation(data$matX,data$matZ,tt,tt,0.1,kern=dEpan) 
 plot(tt,matp$matp13[,1],xlab="t",ylab="p12_hat")
 
-thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)#lam= 0.001 ,k= 1.387237
 plot(tt,thetahat$lambdahat[,1], xlab="t",ylab="lambda_hat") # parameter change a llitle bit
 plot(tt,thetahat$khat[,1],xlab="t",ylab="k_hat")
 
@@ -267,7 +267,9 @@ lines(density(Z4),col="purple")
 
 ###################### lambdahat_t and khat_t using gmm ###################
 
-size <- 20
+library(gmm)
+
+size <- 200
 tt <- seq.int(size)/size
 mu = 2 + seq(0, 5, length.out = size) 
 X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
@@ -275,8 +277,61 @@ Z = rgev(size, loc = mu, scale = 1, shape = 0)
 
 h=0.11
 
-G_empirique<-ecdf(X) 
-matGm <- G_empirique(Z)
+GZ<-matGZ_func(X,Z)
 
-weibullGMM_NonStationaire(matGm, tt, tt, h, kern=dEpan, truevalues=NULL)
-# output: matrix lambdahat and khat
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061
+p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
+
+
+######### Comparison between de p1r_t estimation of both gmm an optim   #################
+
+# (This quick comparisons are done with this Gumbels because we know they are W-class and we know p1r theorique)
+
+####### Using only 1 trajectory {(X)t, (Z)t} (N=1)
+split.screen(c(2,2))
+size <- 200
+tt <- seq.int(size)/size
+mu = 2 + seq(0, 5, length.out = size) 
+X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
+Z = rgev(size, loc = mu, scale = 1, shape = 0)
+r=10
+h=0.11
+
+# GMM
+GZ<-matGZ_func(X,Z)
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061
+p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
+# Optim
+matp<-P12_P13_estimation(X,Z,tt,tt,h,kern=dEpan)
+thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL) # lam= 1e-05 ,k= 0.2834847 
+p1r_opt<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size))
+# theo
+theta_theo <- 1 / exp(mu)
+p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+screen(1) # change for 2,3,4
+plot(tt,p1r_t_theo,col="red",type="l")
+lines(tt,p1r_gmm$p1r,col="green")
+lines(tt,p1r_opt$p1r,col="blue")
+# dev.off()
+
+######## Multiple trajectories {(X)t, (Z)t} (N=1) , comparison
+
+# attention, les vales de X,Z seront different à chaque fois quòn fait toure la fonction 
+# les aleurs que prennent les deux méthodes seront differents
+size <- 250
+tt <- seq.int(size)/size
+mu = 2 + seq(0, 5, length.out = size)
+r=4
+plotoptim<-FastTestforp1r_gumbel(tt,h=0.11,r=r,m=size*4,n=size,N=16,sigX.vec=1,sigZ.vec=1,muX.vec=0,muZ.vec=mu,methode="optim")
+plotgmm<-FastTestforp1r_gumbel(tt,h=0.11,r=r,m=size*4,n=size,N=16,sigX.vec=1,sigZ.vec=1,muX.vec=0,muZ.vec=mu,methode="gmm")
+
+theta_theo <- 1 / exp(mu)
+p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+
+plot(tt,p1r_t_theo,col="red",type="l")
+lines(tt,plotoptim$p1r_mean, col="blue")
+lines(tt,plotgmm$p1r_mean,col="green")
+
+
