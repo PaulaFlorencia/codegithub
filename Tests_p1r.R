@@ -463,8 +463,8 @@ dif_p13_mat <- matrix(nrow = length(lambda), ncol = length(k))
 
 for(i in seq_along(lambda)){
   for(j in seq_along(k)){
-    dif_p12_mat[i, j] <- fg_test(c(lambda[i], k[j]))[1]
-    dif_p13_mat[i, j] <- fg_test(c(lambda[i], k[j]))[2]
+    dif_p12_mat[i, j] <- mean(fg_test(c(lambda[i], k[j]))[,1])
+    dif_p13_mat[i, j] <- mean(fg_test(c(lambda[i], k[j]))[,2])
   }
 }
 idx12 <- which(abs(dif_p12_mat) == min(abs(dif_p12_mat)), arr.ind =  TRUE);idx12
@@ -485,9 +485,12 @@ EGMMweibull_NonStationary <- gmm(g=fg_noyaux,
                                  optfct="nlminb",
                                  lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
                                  onlyCoefficients = FALSE, #avant c'était TRUE
-                                 #control = list(eval.max = 1000, iter.max = 1000, abs.tol = 1e-20, 
-                                 #rel.tol = 1e-20)
+                                 control = list(trace=1 )
                                  
 )
 
 EGMMweibull_NonStationary
+
+summary(EGMMweibull_NonStationary)
+
+
