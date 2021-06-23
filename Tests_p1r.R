@@ -265,8 +265,49 @@ Z4 = rgev(size, loc = muZ_t[4], scale = sigZ_t[4], shape = 0.25)
 lines(density(Z4),col="purple")
 
 
+### More general Simul W-class examples:
+# FOR KSI=0 THE FONCTION IS NOT WORKING BECAUSE THERE IS A PARENTHESIS PROBLEM
+
+size=20
+tt <- seq.int(size)/size
+
+# ksi!=0 , ksiZ constant, sigZ variable, mu unknown
+sigma <- seq(1, 3, length.out = size)
+simul1<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=NULL,sigZ=sigma,unknown="location")
+# ksi!=0 , ksiZ variable, sigZ variable, mu unknown
+sigma <- seq(1, 3, length.out = size)
+ksi <- seq(0.1,0.2,length.out = size)
+simul2<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0,ksiZ=ksi,muZ=NULL,sigZ=sigma,unknown="location")
+
+# ksi!=0 , ksiZ constant, sigZ variable, sig unknown
+mu <- seq(1, 2, length.out = size)
+simul3<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=mu,sigZ=NULL,unknown="scale")
+# ksi!=0 , ksiZ variable, sigZ variable, sig unknown
+sigma <- seq(1, 3, length.out = size)
+ksi <- seq(0.1,0.2,length.out = size)
+simul4<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=ksi,muZ=mu,sigZ=NULL,unknown="scale")
+
+# ksi!=0 , muZ constant, sigZ variable, ksi unknown
+sigma <- seq(1, 2, length.out = size)
+simul5<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=NULL,muZ=1,sigZ=sigma,unknown="shape") # pourquoi lam const?
+sigma <- seq(1, 3, length.out = size)
+simul6<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=NULL,muZ=1,sigZ=sigma,unknown="shape")
+# -> lambda est toujours constante
+# ksi!=0 , muZ variable, sigZ variable, ksi unknown
+mu <- seq(1, 2, length.out = size)
+simul7<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.25,sigX=1,muX=0.2,ksiZ=NULL,muZ=mu,sigZ=sigma,unknown="shape") 
+
+# ksi==0 , muZ variable, sigZ variable, ksi unknown
+sigma <- seq(1, 3, length.out = size)
+mu <- seq(1, 2, length.out = size)
+simul8<-simulWclass_nonStationnary(m=size,N=1,ksiX=0,sigX=1,muX=0.2,ksiZ=0,muZ=mu,sigZ=sigma) 
+
+
+
 ###################### lambdahat_t and khat_t using gmm ###################
 
+# functions needed
+# matGZ_func, weibullGMM_NonStationaire_startval_1, weibullGMM_NonStationaire, function_gmm_noyaux,laplaceWeibull, funclaplace, dEpan.
 library(gmm)
 
 size <- 200
@@ -276,11 +317,12 @@ X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
 Z = rgev(size, loc = mu, scale = 1, shape = 0)
 
 h=0.11
-
+r=4
 GZ<-matGZ_func(X,Z)
 
 ## Starting from lambda_(t-1), k_(t-1) at each t>1 save us time : 
-system.time(param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))#lam= 0.002590114 ,k= 1.304888  
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+# system.time(param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))#lam= 0.002590114 ,k= 1.304888  
 # system tye: 3.055 s
 
 system.time(param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))
@@ -369,3 +411,83 @@ plot(tt,p1r_t_theo,col="red",type="l")
 lines(tt,p1r_gmm$p1r,col="green")
 lines(tt,p1r_opt$p1r,col="blue")
 
+######################################  Test of the gmm méthod ######################################
+#####################################################################################################
+set.seed(401)
+# set.seed(Sys.time())
+
+size <- 200
+tt <- seq.int(size)/size
+
+# CAS 1
+mu = 2 + seq(0, 5, length.out = size) 
+X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
+Z = rgev(size, loc = mu, scale = 1, shape = 0)
+
+h=0.11
+# r=4
+
+### Theoretic lambda et k 
+k_t_theo <- rep(1,size) # sigx/sigz
+lambda_t_theo <- exp((0-mu)/1) # exp((mux-muz)/sigx)
+
+### Calcul G(Z)_t
+GZ<-matGZ_func(X,Z)
+
+############################## Comparation of the two initialisation méthods ######################################
+
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+
+param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+
+####### On peut voir qu'ils ne donnent pas les meme resultats 
+plot(tt,k_t_theo,type="l", main=" k estimation")
+lines(tt,param$khat,col="blue")
+lines(tt,param2$khat,col="red")
+
+plot(tt,lambda_t_theo,type="l", main="lambda estimation")
+lines(tt,param$lambdahat,col="blue")
+lines(tt,param2$lambdahat,col="red")
+
+######################### Valeurs de la fonction function_gmm_noyaux ##################
+
+library(fields)
+
+fg_test <- function(theta,vecx){function_gmm_noyaux(theta,vecx=GZ,index=200,tt.vec=tt,t_eval.vec=tt,bandwidth=h)}
+
+lambda <- seq(0.001, 0.15, 0.005)
+k <- seq(0.01, 1.1, 0.01)
+
+dif_p12_mat <- matrix(nrow = length(lambda), ncol = length(k))
+dif_p13_mat <- matrix(nrow = length(lambda), ncol = length(k))
+
+for(i in seq_along(lambda)){
+  for(j in seq_along(k)){
+    dif_p12_mat[i, j] <- fg_test(c(lambda[i], k[j]))[1]
+    dif_p13_mat[i, j] <- fg_test(c(lambda[i], k[j]))[2]
+  }
+}
+idx12 <- which(abs(dif_p12_mat) == min(abs(dif_p12_mat)), arr.ind =  TRUE);idx12
+idx13 <- which(abs(dif_p13_mat) == min(abs(dif_p13_mat)), arr.ind =  TRUE);idx13
+
+image.plot(lambda, k,dif_p12_mat)
+points(lambda[idx12[1]], k[idx12[2]], col="white", pch=20)
+image.plot(lambda, k, dif_p13_mat)
+points(lambda[idx13[1]], k[idx13[2]], col="white", pch=20)
+
+###########################  convergence de la méthode  ##########################################
+
+fg_noyaux <- function(theta,vecx){function_gmm_noyaux(theta,vecx=GZ,index=150,tt.vec=tt,t_eval.vec=tt,bandwidth=h)}
+
+EGMMweibull_NonStationary <- gmm(g=fg_noyaux,
+                                 x=GZ,
+                                 t0= c(1,1),
+                                 optfct="nlminb",
+                                 lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
+                                 onlyCoefficients = FALSE, #avant c'était TRUE
+                                 #control = list(eval.max = 1000, iter.max = 1000, abs.tol = 1e-20, 
+                                 #rel.tol = 1e-20)
+                                 
+)
+
+EGMMweibull_NonStationary
