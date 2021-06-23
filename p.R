@@ -960,11 +960,13 @@ simulWclass_nonStationnary <-function(m,n,N,ksiX,ksiZ,sigX,muX=0,muZ=0,sigZ=0,un
   # argument a montre quand on fait help
   # pas m,n comme parametre
   
+  ## -> verification de taille
+  
   if (sign(ksiX)!=sign(ksiZ)){
     stop("X and Z can not be W-class, shape parameters must have the same sign")
   }
   
-  if (ksiX==0|ksiZ==0){
+  if (ksiX==0|ksiZ==0){#xxx
     stop(" trayectories with shape parameter equal to 0 are always W-class. This case is not treated in this fonction")
    
   }
@@ -1003,6 +1005,210 @@ tt <- seq.int(size)/size
 simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=1,ksiZ=1.2,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
 
 simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.20,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) # better for visualisation
+
+# more general foction, where we can have a variable shape parameters or equal to 0:
+# PATENTHESIS PROBLEM !!
+simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location"){
+  
+  if (ksiX!=0){
+    if (unknown == "location"){
+      # We take our Z's sample size from the length of shape input
+      n <- length(ksiZ)
+      # We remind that if our shape input is just a value, the sample size will be 1
+      if (n == 1){
+        warning("Z's shape parameters length give us the size of this strajectory")
+      }
+      # Verification. Shape parameters must be of the same sign
+      for (i in 1:n){
+        if (sign(ksiZ[i])!=sign(ksiX)){
+          stop("X and Z can not be W-class, shape parameters must have the same sign")
+        }
+      }
+      # We must verify that only Z's location parameter is unknown
+      if (!is.null(muZ)){
+        stop("Location parameter of Z must be unknown")
+      }
+      
+      if (is.null(sigZ)){
+        stop("Scale parameter of Z must be known")
+      }
+      if (is.null(ksiZ)){
+        stop("Shape parameter of Z must be known")
+      }
+      # Verification that X's parameters are just values
+      if (length(muX)!=1 | length(sigX)!=1 | length(ksiX)!=1){
+        stop("X's parameters must be of just 1 value")
+      }
+      # Z's parameters must be of the same length
+      if (length(sigZ) == 1) {
+        sigZ <- rep(sigZ,n)
+      }
+      if (length(sigZ)!=n){
+        stop("Z's parameters are not from the same length")
+      }
+      # support value
+      support <- muX - sigX/ksiX
+      # We impose the condition of equal support
+      muZ <- support + sigZ/ksiZ
+    }
+    if (unknown == "scale"){
+      # We take our sample size from the length of shape inputs
+      n <- length(ksiZ)
+      # We remind that if our shape inputs are just a value, the sample size will be 1
+      if (n == 1){
+        warning("Z's shape parameters length will give us the size of this strajectory")
+      }
+      # Verification. Shape parameters must be of the same sign
+      for (i in 1:n){
+        if (sign(ksiZ[i])!=sign(ksiX)){
+          stop("X and Z can not be W-class, shape parameters must have the same sign")
+        }
+      }
+      # We must verify that only Z's scale parameter is unknown
+      if (!is.null(sigZ)){
+        stop("Scale parameter of Z must be unknown")
+      }
+      if (is.null(muZ)){
+        stop("Location parameter of Z must be known")
+      }
+      if (is.null(ksiZ)){
+        stop("Shape parameter of Z must be known")
+      }
+      # Verification that X's parameters are just values
+      if (length(muX)!=1 | length(sigX)!=1 | length(ksiX)!=1){
+        stop("X's parameters must be of just 1 value")
+      }
+      # Z's parameters must be of the same length
+      if (length(muZ) == 1) {
+        muZ <- rep(muZ,n)
+      }
+      if (length(muZ)!=n){
+        stop("Z's parameters are not from the same length")
+      }
+      # support value
+      support <- muX - sigX/ksiX
+      # We impose the condition of equal support
+      sigZ <- (support - muZ)*(-ksiZ)
+    }
+    if (unknown == "shape"){
+      # We take our sample size from the length of scale inputs
+      n <- length(sigZ)
+      # We remind that if our shape inputs are just a value, the sample size will be 1
+      if (n == 1){
+        warning("Z's scale parameters length will give us the size of this strajectory")
+      }
+      # We must verify that only Z's location parameter is unknown
+      if (!is.null(ksiZ)){
+        stop("Shape parameter of Z must be unknown")
+      }
+      if (is.null(muZ)){
+        stop("Location parameter of Z must be known")
+      }
+      if (is.null(sigZ)){
+        stop("Scale parameter of Z must be known")
+      }
+      # Verification that X's parameters are just values
+      if (length(muX)!=1 | length(sigX)!=1 | length(ksiX)!=1){
+        stop("X's parameters must be of just 1 value")
+      }
+      # Z's parameters must be of the same length
+      if (length(muZ) == 1) {
+        muZ <- rep(muZ,n)
+      }
+      if (length(muZ)!=n){
+        stop("Z's parameters are not from the same length")
+      }
+      
+      
+      # support value
+      support <- muX - sigX/ksiX
+      # We impose the condition of equal support
+      ksiZ <- sigZ/(muZ - support)
+      # Verification. Shape parameters must be of the same sign
+      
+      for (i in 1:n){
+        ksiZ_i<- as.numeric(ksiZ[i])
+        if ((sign(ksiZ_i)==sign(ksiX))==FALSE){
+          stop("X and Z can not be W-class, shape parameters must have the same sign")
+        }
+      }
+      
+    }
+    matX<-matrix(nrow=m,ncol=N)
+    matZ<-matrix(nrow=n,ncol=N)
+    
+    for(j in 1:N){
+      matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
+      for(i in 1:n)
+        matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
+  }
+  
+  # Calculation of lambda an k 
+  return (list("matX"=matX,
+               "matZ"=matZ,
+               "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
+               "k"=ksiX/ksiZ,
+               "mu_Z"=muZ,
+               "sig_Z"=sigZ,
+               "ksi_Z"=ksiZ))
+}
+# if ksiX==0
+if (ksiX==0){
+  n <- length(sigZ)
+  # We remind that if our shape inputs are just a value, the sample size will be 1
+  
+  matX<-matrix(nrow=m,ncol=N)
+  matZ<-matrix(nrow=n,ncol=N)
+  
+  if (n == 1){
+    warning("Z's scale parameters length will give us the size of this strajectory")
+  }
+  
+  # In this case we must known all the parameters
+  if (is.null(sigZ)){
+    stop("All Z parameters must be unknown")
+  }
+  if (is.null(muZ)){
+    stop("All Z parameters must be unknown")
+  }
+  if (is.null(ksiZ)){
+    stop("All Z parameters must be unknown")
+  }
+  
+  # ksiZ will be re defined as 0 as precaution
+  ksiZ<-rep(0,n)
+  
+  # Verification that X's parameters are just values
+  if (length(muX)!=1 | length(sigX)!=1 | length(ksiX)!=1){
+    stop("X's parameters must be of just 1 value")
+  }
+  # Z's parameters must be of the same length
+  if (length(muZ) == 1) {
+    muZ <- rep(muZ,n)
+  }
+  if (length(sigZ) == 1) {
+    sigZ <- rep(sigZ,n)
+  }
+  if (length(muZ)!=n){
+    stop("Z's parameters are not from the same length")
+  }
+  if (length(sigZ)!=n){
+    stop("Z's parameters are not from the same length")
+  }
+  
+  for(j in 1:N){
+    matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
+    for(i in 1:n)
+      matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
+}
+
+return (list("matX"=matX,
+             "matZ"=matZ,
+             "lam"=exp((muX-muZ)/sigX),
+             "k"=sigX/sigZ))
+}
+}
+
 
 
 ##########################3
