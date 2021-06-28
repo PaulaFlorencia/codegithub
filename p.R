@@ -1,50 +1,16 @@
-###################### Exemples ###############################
-library(evd)
-# RNG
-#set.seed(1)
-set.seed(Sys.time())
+################################################################################################
+################################################################################################
+### This document contains all the fonctions that are neccesary for the utilisation for the  ###   
+### utilisation of Tests_p1.R                                                                ###
+################################################################################################
+################################################################################################
 
-# Easy visualisation distributions
-size <- 20
-tt <- seq.int(size)
-mu = seq(0, 5, length.out = size) 
-X_gev = rgev(size, loc = 0, scale = 1, shape = 0)
-Z_gev = rgev(size, loc = 2, scale = 1, shape = 0)
-Z_gev_trend = rgev(size, loc = mu, scale = 1, shape = 0)
 
-X_norm = rnorm(size,sd=2)
-Z_norm = rnorm(size,0.4,2)
+################################################################################################
+############################ p12_t and p13_t computation #######################################
 
-############# Example 1
-# Gumbel - (set.seed(292))
+######  Kernels  ###############################################################################
 
-# Simulations
-size <-  250*4
-rp <- 50
-tt <- seq.int(size)/size
-mu = 2 + seq(0, 5, length.out = size) 
-X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
-Z = rgev(size, loc = mu, scale = 1, shape = 0)
-theta_theo <- 1 / exp(mu)
-p12_theo <- 1 / (1 + theta_theo)
-
-############ Example 2
-# Frechet - set.seed(304)
-
-# Simulations
-size <-  250 * 4
-rp <- 50
-tt <- seq.int(size)/size
-sigma <- seq(1, 2, length.out = size)
-xi = 0.5
-x = rgev(size * 1/4, loc = 1, scale = xi, shape = xi)
-z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi)
-theta_theo <- sigma^(-1 / xi)
-p12_theo <- 1 / (1 + theta_theo)
-G_theo <- function(z) pgev(z, loc = 1, scale = xi, shape = xi)
-far_theo_rp <- (1 - theta_theo) * (1 - 1/rp)
-
-#########################  Kernels exemples ##########################################
 # Epanechnikov density distribution
 dEpan <- function(x){
   k <- (3/4)* (1-x^2)
@@ -52,10 +18,11 @@ dEpan <- function(x){
   k[x>1] <- 0
   return (k)
 } 
+
 # Normal distribution
 Kern_gauss <- function(x)exp(-x^2/2)
 
-###################### p12 Non parametric computation ################
+#### p12 Non parametric computation ##############################################################
 p12_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
   # G_Z computation
   G_emp <- ecdf(X)
@@ -67,7 +34,22 @@ p12_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
   p12_hat <- W %*% G_Z
 }
 
-################################### Computation of IC ################################
+#### p13 Non parametric computation ##############################################################
+
+p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
+  # G_Z computation
+  G_emp_carre <- ecdf(X)
+  G_Z_carre <- (G_emp_carre(Z))^2
+  # W computation
+  Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
+  W <- Kij / rowSums(Kij)
+  # p12_hat computation
+  p13_hat <- W %*% G_Z_carre
+}
+
+################################### Confidence interval ###########################################
+
+#### Auxiliary fonctions 
 dEpan_2<- function(x){
   k <- ((3/4)* (1-x^2))^2
   k[-1>x] <- 0
@@ -84,6 +66,7 @@ kern_dens <- function(tt,t_eval,h,kern=dEpan) {
     return(fh)
 }
 
+#### Confidence interval computation
 IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
   # computation of G_Z
   G_emp <- ecdf(X)
@@ -115,153 +98,7 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
   return(list(low=left,high=right))
 }
 
-##### Computation and plot of p12_hat and CI for 1 couple (X,Z)
-library(ggplot2)
-p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
-ic<-IC(X,Z,tt,tt,0.11) 
-df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,heo=p12_theo)
-p12plot<-ggplot(df,aes(x=tt,y=p12_hat)) + geom_line(colour="red") 
-p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
-p12plot <- p12plot + geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) 
-p12plot <- p12plot + ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
-p12plot
-
-################################# Quality of convergence #################################
-
-# Computation of multiple samples (X,Z)
-N <- 10
-sigma <- seq(1, 2, length.out = size)
-xi = 0.5
-samplex <- NULL; for (i in 1:N){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
-samplez <- NULL; for (i in 1:N){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
-
-# Computation of p12_hat_sample for each (Xi,Zi)
-p12_hat_samples <- matrix(0,size,N); ic_samples_high <- matrix(0,size,N); ic_samples_low <- matrix(0,size,N)
-for (i in 1:N){
-  p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
-  ic_samples_high[,i] <- ic_samples_high[,i] + as.vector(IC(samplex[,i],samplez[,i],tt,tt,0.11)$high)
-  ic_samples_low[,i] <- ic_samples_low[,i] + as.vector(IC(samplex[,i],samplez[,i],tt,tt,0.11)$low)
-}
-
-# Computation on average for big N
-p12_hat_moyen <- rowMeans(as.matrix(p12_hat_samples)); ic_samples_high <- rowMeans(as.matrix(ic_samples_high)); ic_samples_low <-rowMeans(as.matrix(ic_samples_low))
-
-# Plot
-library(ggplot2)
-df <-data.frame(x=tt,y=p12_hat_moyen,z1=ic_samples_low , z2=ic_samples_high ,theo=p12_theo)
-p12plot<-ggplot(df,aes(x=tt,y=p12_hat_moyen)) + geom_line(colour="red") 
-p12plot<- p12plot + geom_line(aes(y=p12_theo), colour="black")
-p12plot <- p12plot + geom_ribbon(aes(ymin=ic_samples_low, ymax=ic_samples_high), linetype=2, alpha=0.1) 
-p12plot <- p12plot + ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
-p12plot
-
-# Error between p12_theo and p12_hat
-p12_error <- abs(p12_theo - p12_hat_moyen)
-plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
-
-# Incertitude of estimation
-ic_error <- ic_samples_high - ic_samples_low
-plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
-
-# max error evolution within N (Global error)
-Nn=50
-max_error_evolution <- rep(0,Nn)
-for (j in 1:Nn) {
-  samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
-  samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
-  p12_hat_samples <- matrix(0,size,j)
-  for (i in 1:j){
-    p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
-  }
-  p12_hat_moyen <- rowMeans(p12_hat_samples)
-  p12_error <- abs(p12_theo - p12_hat_moyen[j])
-  max_error_evolution[j] <- max(p12_error)
-}
-plot(1:Nn,max_error_evolution)
-
-# Conditional error: 
-
-Nn=50
-matrix_p12_moyen <- NULL
-mean_p12 <- matrix(0,size,Nn)
-conditional_error <- matrix(0,size,Nn)
-for (j in 1:Nn) {
-  samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
-  samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
-  p12_hat_samples <- NULL; for (i in 1:j){p12_hat_samples<-cbind(p12_hat_samples,p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11))}
-  mean_p12[,j] <- rowMeans(p12_hat_samples)
-  conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
-}
-
-matplot(x= tt , y= as.matrix(conditional_error), type='l', pch=1, 
-        col= 2:5, xlab='tt', ylab = 'error')
-###########
-Nn=c(5,50,500)
-mean_p12 <- matrix(0,size,length(Nn))
-conditional_error <- matrix(0,size,length(Nn))
-for (j in 1:length(Nn)) {
-  samplex <- NULL; for (i in 1:Nn[j]){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
-  samplez <- NULL; for (i in 1:Nn[j]){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
-  p12_hat_samples <- NULL; for (i in 1:Nn[j]){p12_hat_samples<-cbind(p12_hat_samples,p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11))}
-  mean_p12[,j] <- rowMeans(p12_hat_samples)
-  conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
-}
-
-matplot(x= tt , y= conditional_error, type='l', pch=1, 
-        col= 2:5, xlab='tt', ylab = 'error')
-
-for (j in Nn) {print(j)}
-# rouge,vert, bleu 
-
-################## Distributions with random location parameter ###############################
-# distributions
-ui<-rnorm(2);bi<-rnorm(2,mean=1,sd=0.1)
-X1<-rgev(size, loc=ui[1], scale=1, shape=0); X2<-rgev(size, loc=ui[2], scale=1, shape=0)
-Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0); Z2<-rgev(size, loc = ui[2]+bi[2]*t, scale = 1, shape = 0)
-# p12 computation
-p12_1<-p12_NonPar(X1,Z1,tt,tt,0.2); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.2);ic_1<-IC(X1,Z1,tt,tt,0.2) ;ic_2<-IC(X2,Z2,tt,tt,0.2) 
-#plot
-df_Ex <-data.frame(temp=tt,x=p12_1,y=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
-p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
-  geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1)
-p12plot
-
-############################### Bandwith selection #################################
-
-#####  Some plots of p12_hat and G(Z) computation with different bandwiths
-
-h1=0.01; h2=0.1; h3=1
-
-# Gumbel
-p12_g1<-p12_NonPar(X,Z,tt,tt,h1); p12_g2<-p12_NonPar(X,Z,tt,tt,h2); p12_g3<-p12_NonPar(X,Z,tt,tt,h3)
-G_emp_X <- ecdf(X); G_Z <- G_emp(Z)
-df_g<-data.frame(x=tt, y1=p12_g1, y2=p12_g2, y3=p12_g3, theo=p12_theo, g=G_Z)
-hchoix_g<-ggplot(df_g,aes(x=tt,y=G_Z)) + geom_point(colour="#999999",size=0.5, shape=23)+
-  geom_line(aes(y=p12_theo), colour="black")+
-  geom_line(aes(x=tt,y=p12_g1,colour="red"))+geom_line(aes(x=tt,y=p12_g2,colour="blue"))+
-  geom_line(aes(x=tt,y=p12_g3,colour="green"))
-hchoix_g
-
-# Frechet
-p12_f1<-p12_NonPar(x,z,tt,tt,h1); p12_f2<-p12_NonPar(x,z,tt,tt,h2); p12_f3<-p12_NonPar(x,z,tt,tt,h3)
-G_emp_x<-ecdf(x); G_z<-G_emp(z)
-df_f<-data.frame(x=tt,y1=p12_f1,y2=p12_f2,y3=p12_f3,theo=p12_theo,g=G_z)
-hchoix_f<-ggplot(df_h_2,aes(x=tt,y=G_z)) + geom_point(colour="#999999",size=0.5, shape=23)+
-  geom_line(aes(y=p12_theo), colour="black")+
-  geom_line(aes(x=tt,y=p12_f1,colour="red"))+geom_line(aes(x=t,y=p12_f2,colour="blue"))+
-  geom_line(aes(x=tt,y=p12_f3,colour="green"))
-hchoix_f
-
-##### Optimal bandwidth computation
-
-# Computation of vector of errors
-
-h_seq<-seq(from=0.01, to=1,by=0.02)
-h_seq <-seq(from=0.1,to=1, by=0.1)
-size <-  250 * 4
-tt <- seq.int(size)/size
-t_eval <- seq.int(size)/size
-
+#### Error
 CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
   n <- length(tt)
   G_emp <- ecdf(X)
@@ -280,134 +117,9 @@ CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
   }
   return(CV_err_h) #vector of errors
 }
-error_vector<-CV_error(x,z,tt,tt,h_seq,kern= dEpan)
 
-# Error plot 
-plot(x=h_seq, y=error_vector, type="b", lwd=3, col="blue",
-     xlab="Smoothing bandwidth", ylab="LOOCV prediction error")
-
-h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]; h_opt # optimal bandwith = 0.11
-opt_err <-min(CV_err_h); opt_err # optimal erreur = 0.03589835
-
-
-
-############################# Add "real" variable Y #################################
-
-
-###################### X stationary and Z with trend
-size <-  250*4
-tt <- seq.int(size)/size
-# numer of models 
-m <- 2
-# paraters of the models
-ui<-rnorm(m) 
-bi<-rnorm(m,mean=1,sd=0.1)
-
-scale_Z_real=1
-shape_Z_real=0
-
-# fonction that creates "real" factual run
-Z_real_comp <- function(size,scale_Z_real,shape_Z_real) {
-  mean=0; coef=1 # parameters of gev
-  Z_real<-rep(0,size)
-  for (i in 1:size/4){
-    Z_real[i]<-Z_real[i]+rgev(1,loc=mean, scale_Z_real, shape_Z_real)
-  }
-  for (i in 251 : size){
-    Z_real[i]<-Z_real[i]+rgev(1,loc=mean+(coef*tt[i]-(size/4))/size, scale_Z_real, shape_Z_real)
-  }
-  return(Z_real)
-}
-
-# "real" factual(Z) and couterfactual(X) run
-Z_real<-Z_real_comp(size,scale=1,shape=0)
-X_real<-rgev(size*5, loc=mean, scale=1, shape=0)
-# run from model 1
-X1<-rgev(size*5, loc=ui[1], scale=1, shape=0)
-Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0)
-# run from model 2
-X2<-rgev(size*5, loc=ui[2], scale=1, shape=0)
-Z2<-rgev(size, loc = ui[2]+bi[2]*tt, scale = 1, shape = 0)
-# "real" p12 , p12_hat and CI of each model 
-p12_real<-p12_NonPar(X_real,Z_real,tt,tt,0.11); p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
-ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
-# plot
-df_Ex <-data.frame(temp=tt, x=p12_real, y1=p12_1, y2=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
-p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
-  geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12_real, colour="blue")
-p12plot
-
-dev.off()
-
-################# Monde avant "effet" du forçage anthropique 
-
-# run from model 1
-X1<-rgev(size*5, loc=ui[1], scale=1, shape=0); Z1<-rgev(size, loc = ui[1], scale = 1, shape = 0)
-# run from model 2
-X2<-rgev(size*5, loc=ui[2], scale=1, shape=0); Z2<-rgev(size, loc = ui[2], scale = 1, shape = 0)
-
-p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
-ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
-
-p12hat_moyen<- (p12_1 + p12_2)/2
-
-df_Ex <-data.frame(temp=tt, y1=p12_1, y2=p12_2, y3= p12hat_moyen, z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
-p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
-  geom_line(aes(y=p12_2), colour="blue")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12hat_moyen, colour="green")+
-  geom_hline(yintercept = 0.5) + ggtitle("p02 estimation over time") + ylab("p02") + xlab("time")
-p12plot
-
-################################## p13_t computation #######################################
-
-p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
-  # G_Z computation
-  G_emp_carre <- ecdf(X)
-  G_Z_carre <- (G_emp_carre(Z))^2
-  # W computation
-  Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
-  W <- Kij / rowSums(Kij)
-  # p12_hat computation
-  p13_hat <- W %*% G_Z_carre
-}
-
-p13_hat<-p13_NonPar(X,Z,tt,tt,0.11)
-plot(tt, p13_hat)
-p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
-plot(tt, p12_hat)
-
-dev.off()
-
-############# Using non-parametric kernel computed p12, p13 for p1r parametric computation ##################
-
-library(stats4); library(gmm); library(stats); library(np); library(EWGoF)
-
-# simulate multiple stationnary {(X)t,(Z)t} W-class trajectories
-
-simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0,graph=TRUE){
-
-  if (sigZ == 0) { sigZ = sigX } 
-  if (supportauto == TRUE){ muZ <- muX + sigZ/ksiZ - sigX/ksiX }
-  matX <- matrix(rep(0,m*N),nrow=m,ncol=N) 
-  matZ <- matrix(rep(0,n*N),nrow=n,ncol=N) 
-  for (j in 1:N){
-    matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
-    matZ[,j] = muZ + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
-  }
-  if (graph==TRUE){
-    plot(density(matX[,1]),
-         main="Kernel density estimates \nfor the first X sample (black, counterfactual),\n and the first Z sample (red, factual)",
-         cex.main=0.8,
-         xlim=c(-4,12))
-    lines(density(matZ[,1]),col="red")
-  }
-  return(list("matX"=matX,
-              "matZ"=matZ,
-              "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
-              "k"=ksiX/ksiZ) 
-  )  
-}
-
-# Estimate p12t and p13t for each trajectory {(X)t,(Z)t}
+#### General fonction #############################################################################
+# Estimate p12_t and p13_t for each trajectory {(X)_t,(Z)_t}
 
 P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   
@@ -424,9 +136,15 @@ P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   }
   return(list("matp12"=matp12,"matp13"=matp13))
 }
-  
 
-# funcLaplace and laplace Weibull are necessary to compute E(G(Z)^j)
+################################################################################################
+############################ lambda_t and k_t computation ######################################
+############################ (We tested different méthods) #####################################
+################################################################################################
+
+library(stats4); library(gmm); library(stats); library(np); library(EWGoF)
+
+#### functions for E(G(Z)^j)
 
 funcLaplace <- function(x,m,lam,k,a){ 
   (1/a) * exp( -(m*lam/a^(1/k))*(-log(x))^(1/k) ) * x^(1/a - 1) 
@@ -448,7 +166,53 @@ laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(
   return(resultat)
 }
 
-functiong <- function(theta,vecx){
+#### Jacobian computation
+jacobianFunctiong12 <- function(lam.vec,k.vec,debugg=FALSE){
+  lvec <- length(lam.vec)
+  listejacobiennes <- list()
+  for (i in 1:lvec){
+    lambda <- lam.vec[i] ; k <- k.vec[i]
+    dg1surdlambda <- dgjoverdlambdafunc(1,lambda,k)
+    if (debugg){ cat("i=",i,": dg1dlam,") }
+    dg1surdk <- dgjoverdkfunc(1,lambda,k)
+    if (debugg){ cat("dg1dk,")}
+    dg2surdlambda <- dgjoverdlambdafunc(2,lambda,k)
+    if (debugg){ cat("dg2dlam,")}
+    dg2surdk <- dgjoverdkfunc(2,lambda,k)
+    if (debugg){ cat("dg2dk\n")}
+    listejacobiennes[[i]] <- matrix(c(dg1surdlambda,dg1surdk,dg2surdlambda,dg2surdk),
+                                    2,2,byrow=TRUE)
+  }
+  return(list(listejacobiennes))
+}
+
+foncdgjoverdlambda <- function(u,j,lam,k,a){
+  (-j/a^((1/k)+1)) * (-log(u))^(1/k) * exp( -(j*lam/a^(1/k))*(-log(u))^(1/k) ) * u^(1/a - 1) 
+}
+
+dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=0.5){
+  vala=fac*(j*lambda)^k
+  I <- integrate(f=foncdgjoverdlambda,lower=lowerbnd,upper=1,subdivisions=1000L,
+                 j=j,lam=lambda,k=k,a=vala,
+                 stop.on.error = FALSE)
+  return(I$value) 
+}
+
+foncdgjoverdk <- function(u,j,lam,k,a){
+  (-lam/k^2) * log( (1/a)*(-log(u)) ) * foncdgjoverdlambda(u,j,lam,k,a)
+}
+
+dgjoverdkfunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=1){
+  vala=fac*(j*lambda)^k
+  I <- integrate(f=foncdgjoverdk,lower=lowerbnd,upper=1,subdivisions=1000L,
+                 j=j,lam=lambda,k=k,a=vala,stop.on.error = FALSE)
+  return(I$value) 
+}
+
+################################################################################################
+############################ fsolve method #####################################################
+
+functionp12p13 <- function(theta,vecx){
   lambdaval=theta[1] ; kval = theta[2]
   p12 = vecx[1] ; p13 = vecx[2]
   p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
@@ -457,14 +221,11 @@ functiong <- function(theta,vecx){
   return(M)
 }
 
-################### Estimation of lambda_t and k_t using different méthods
-
-# 1.
-# Using fsolve() with jacobian matrix. we will call this method "weibullGMMestim"
+fg <- function(theta){functionp12p13(theta,vecx=phat)}
 
 J12 <- function(x){jacobianFunctiong12(x[1],x[2])}
 
-weibullGMMestim <- function(matp12,matp13,truevalues=NULL){
+weibullFsolve <- function(matp12,matp13,truevalues=NULL){
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
   Nligne <- dim(matp12)[1]
@@ -498,13 +259,13 @@ weibullGMMestim <- function(matp12,matp13,truevalues=NULL){
       startvaluesk_t=startvaluesk.vec[i]
       startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
       
-      fg <- function(theta){functiong(theta,vecx=phat)}
+      fg <- function(theta){functionp12p13(theta,vecx=phat)}
       
-      EGMMweibull <- fsolve(fg,x0=startval_t,J=J12
+      Fsolveweibull <- fsolve(fg,x0=startval_t,J=J12
       )
       
-      lambdahat.vec[i] <- EGMMweibull$x[1]
-      khat.vec[i] <- EGMMweibull$x[2] 
+      lambdahat.vec[i] <- Fsolveweibull$x[1]
+      khat.vec[i] <- FsolveMweibull$x[2] 
     }
     lambdahat.mat[,j] <- lambdahat.vec
     khat.mat[,j] <- khat.vec
@@ -512,11 +273,14 @@ weibullGMMestim <- function(matp12,matp13,truevalues=NULL){
   return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
 }
 
-# 2.
-# Using fsolve3() without jacobian matrix. we will call this method "weibullGMMestim3"
-# fsolve3() is a modification of fsolev(), where we impose [lambda,k]_xnew <- ([lambda,k]_x0)/2 when lamba<0
+################################################################################################
+############################ fsolve  modified method ###########################################
 
-fsolve3<-function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.eps^(0.5), 
+## fsolve_modif() is a modification of fsolev(), where we impose:
+# [lambda,k]_xnew <- ([lambda,k]_x0)/2 when lamba<0
+## We do not use the jacobian matrix
+
+fsolve_modif <- function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.eps^(0.5), 
           ...) 
 {
   if (!is.numeric(x0)) 
@@ -536,7 +300,7 @@ fsolve3<-function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.eps^(0.
     J <- function(x) jacobian(f, x)
   }
   if (m == n) {
-    sol = broyden3(f, x0, J0 = J(x0), maxiter = maxiter, 
+    sol = broyden_modif(f, x0, J0 = J(x0), maxiter = maxiter, 
                   tol = tol)
     xs <- sol$zero
     fs <- f(xs)
@@ -552,7 +316,7 @@ fsolve3<-function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.eps^(0.
   return(list(x = xs, fval = fs))
 }
 
-broyden3<-function (Ffun, x0,J0 = NULL, ..., maxiter = 100, tol = .Machine$double.eps^(1/2)) 
+broyden_modif<-function (Ffun, x0,J0 = NULL, ..., maxiter = 100, tol = .Machine$double.eps^(1/2)) 
 {
   if (!is.numeric(x0)) 
     stop("Argument 'x0' must be a numeric (row or column) vector.")
@@ -605,7 +369,7 @@ broyden3<-function (Ffun, x0,J0 = NULL, ..., maxiter = 100, tol = .Machine$doubl
   return(list(zero = c(xnew), fnorm = fnew, niter = k))
 }
 
-weibullGMMestim3 <- function(matp12,matp13,truevalues=NULL){
+weibullFsolve_modif <- function(matp12,matp13,truevalues=NULL){
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
   Nligne <- dim(matp12)[1]
@@ -639,11 +403,11 @@ weibullGMMestim3 <- function(matp12,matp13,truevalues=NULL){
       startvaluesk_t=startvaluesk.vec[i]
       startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
       
-      EGMMweibull <- fsolve3(functiong,x0=startval_t,vecx=phat
+      Fsolveweibull_modif <- fsolve_modif(functionp12p13,x0=startval_t,vecx=phat
                             )
       
-      lambdahat.vec[i] <- EGMMweibull$x[1]
-      khat.vec[i] <- EGMMweibull$x[2] 
+      lambdahat.vec[i] <- Fsolveweibull_modif$x[1]
+      khat.vec[i] <- Fsolveweibull_modif$x[2] 
     }
     lambdahat.mat[,j] <- lambdahat.vec
     khat.mat[,j] <- khat.vec
@@ -651,24 +415,19 @@ weibullGMMestim3 <- function(matp12,matp13,truevalues=NULL){
   return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
 }
 
+################################################################################################
+############################ Optisation approcah ###############################################
+
+#### Using quasi-Newton methods (BFGS and L-BFGS-B)
+
 library(pracma)
 
-# errors: we observe sometimes two type of errors. 
-# error 1: when n is very big (1000) , k gets negative -> non-finite function value
-# error 2: when n is little (20 or 30) -> Error in norm(s, "F") : 'A' must be a numeric matrix 
+fgoptim<- function (theta,vecx) crossprod(functionp12p13(theta,vecx))
 
+# fg2 <- function (theta){fgoptim(theta,vecx=phat)}
+# Gradfg <- t(JX)%*%(functionp12p13(theta,phat)[[1]]) + crossprod(fg,JX) 
 
-####### Optisation approcah, using quasi-Newton methods (BFGS and L-BFGS-B)
-
-fg1<- function (theta,vecx) crossprod(functiong(theta,vecx)) #elle marche
-fg2 <- function (theta){fg1(theta,vecx=phat)} # necessary when adding 
-
-# Gradfg <- t(JX)%*%(functiong(theta,phat)[[1]]) + crossprod(fg,JX) not ready
-
-
-# weibullGMMestim4 estimates lambda_t, k_t using the optimisation method of choice
-
-weibullGMMestim4 <- function(matp12,matp13,truevalues=NULL){
+weibullOptim<- function(matp12,matp13,truevalues=NULL){
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
   Nligne <- dim(matp12)[1]
@@ -700,13 +459,13 @@ weibullGMMestim4 <- function(matp12,matp13,truevalues=NULL){
       startvalueslambd_t=startvalueslambd.vec[i]
       startvaluesk_t=startvaluesk.vec[i]
       startval_t=as.numeric(c(startvalueslambd_t,startvaluesk_t))
-      EGMMweibull <- optim(par=startval_t,fn=fg1,method="L-BFGS-B",vecx=phat,lower = 10^(-5)
+      Optimweibull <- optim(par=startval_t,fn=fgoptim,method="L-BFGS-B",vecx=phat,lower = 10^(-5)
       )
-      #EGMMweibull <- optim(par=startval_t,fn=fg1,method="BFGS",vecx=phat
+      #Optimweibull <- optim(par=startval_t,fn=fgoptim,method="BFGS",vecx=phat
       #)
       
-      lambdahat.vec[i] <- EGMMweibull$par[1]
-      khat.vec[i] <- EGMMweibull$par[2] 
+      lambdahat.vec[i] <- Optimweibull$par[1]
+      khat.vec[i] <- Optimweibull$par[2] 
     }
     lambdahat.mat[,j] <- lambdahat.vec
     khat.mat[,j] <- khat.vec
@@ -714,81 +473,12 @@ weibullGMMestim4 <- function(matp12,matp13,truevalues=NULL){
   return( list("lambdahat"=lambdahat.mat,"khat"=khat.mat) ) 
 }
 
-####### Computation of p1r_t, far_t using {lambda_t,k_t}
-
-p1rfarW_temps<- function(lam.mat,k.mat,r.mat,lowerbnd=10^(-5)){
-
-  n = dim(lam.mat)[1]
-  N = dim(lam.mat)[2]
-  p1r.mat = matrix(0,n,N)
-  
-  for (j in 1:N){#  for each trajectory
-    
-    lam.vec = lam.mat[,j]
-    k.vec = k.mat[,j]
-    r.vec = r.mat[,j]
-    
-    p1r.vec = p1r.mat[,j]
-    
-    for (i in 1:n){ # for each t in the trajectory
-      
-    
-      p1r_t <- laplaceWeibull(r.vec[i]-1,lam.vec[i],k.vec[i],lowerbnd=lowerbnd)
-      
-      p1r.vec[i] = p1r_t
-    }
-    
-    p1r.mat[,j] <- p1r.vec
-  }  
-  
-  far.mat <- 1 - 1 / (r.mat * p1r.mat)
-  return( list("p1r"=p1r.mat,"far"=far.mat) )
-}
-
-# 2. Apply optim method for multiple trajectories {(X)t,(Z)t}
-
-# Both Gumbel and linear trend un muz. We know two Gumbel have the same support
-FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec,methode="optim"){
-  
-  theta_theo <- 1 / exp(muZ.vec)
-  p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
-  
-  matX <- matrix(nrow=m,ncol=N)
-  matZ <- matrix(nrow=n,ncol=N)
-  matp <- matrix(nrow=n,ncol=N)
-  
-  for (j in 1:N){
-    matX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
-    matZ[,j] <- rgev(n, loc = muZ.vec, scale = sigZ.vec, shape = 0)
-  }
-  
-  if (methode=="optim"){
-    matp<-P12_P13_estimation(matX,matZ,tt,tt,h,kern=dEpan)
-    thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
-  }
-  
-  if (methode=="gmm"){
-    GZ<-matGZ_func(matX,matZ)
-    thetahat<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
-  }
-  
-  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
-  p1r_mean <- rowMeans(p1rfar$p1r)
-  
-  plot(tt,p1r_t_theo,type="l",col="red",xlab="time",ylab="p1r_t", main=paste("evolution over time of p1r with r=",r))
-  lines(tt,p1r_mean)
-  for (i in 1:N){
-    lines(tt,p1rfar$p1r[,i],col="gray")
-  }
-  return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean, "p1rmean"=p1r_mean))
-}
-
-#### 3.  gmm() approach
+################################################################################################
+############################ Modified GMM méthod ###############################################
 
 library(gmm)
 
 matGZ_func<- function(matX,matZ){
-  
   matX <- as.matrix(matX)
   matZ <- as.matrix(matZ) 
   dimnsZ=dim(matZ)
@@ -802,7 +492,29 @@ matGZ_func<- function(matX,matZ){
   return(matGm)
 }
 
+function_gmm_noyaux<-function(theta,vecx,index,tt.vec,t_eval.vec,bandwidth,kern=dEpan){
+  point_eval=t_eval.vec[index]
+  lambdaval=theta[1]; kval=theta[2]
+  
+  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  
+  Kij_ti <- outer(point_eval,tt.vec,function(zz,z)dEpan((zz-z)/bandwidth))
+  Kij_ti <- t(Kij_ti)
+  W <- Kij_ti/sum(Kij_ti)
+  
+  p12_nonMoyenne <- W*vecx
+  p12_nonMoyenne <- as.vector (p12_nonMoyenne)
+  p13_nonMoyenne <- W*(vecx)^2
+  p13_nonMoyenne <- as.vector (p13_nonMoyenne)
+  
+  M <- cbind( length(vecx)*p12_nonMoyenne - p12val ,  length(vecx)*p13_nonMoyenne - p13val )
+  return(M)
+}
+
+####  Initialisation 1 : Using the previus calculated lambda and k as start values ##################
 # Using the previus calculated lambda and k as start values
+
 weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){ # ... also possible
   matGm <- as.matrix(matGm)
   Nligne <- dim(matGm)[1] 
@@ -854,7 +566,9 @@ weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalu
   
 }
 
-#Starting de algorthim at (1,1), or another given value, at each time
+####  Initialisation 2 : start values are the same at each iteration ##################
+# Starting de algorthim at (1,1), or another given value, at each time.
+
 weibullGMM_NonStationaire_startval_1 <- function(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL){ # ... also possible
   matGm <- as.matrix(matGm)
   Nligne <- dim(matGm)[1] 
@@ -904,110 +618,67 @@ weibullGMM_NonStationaire_startval_1 <- function(matGm, tt, t_eval, h, kern=dEpa
   
 }
 
-# utiliser lambda_(t-1) , k_(t-1) come val initial pour t 
-function_gmm_noyaux<-function(theta,vecx,index,tt.vec,t_eval.vec,bandwidth,kern=dEpan){
-  point_eval=t_eval.vec[index]
-  lambdaval=theta[1]; kval=theta[2]
-  
-  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  
-  Kij_ti <- outer(point_eval,tt.vec,function(zz,z)dEpan((zz-z)/bandwidth))
-  Kij_ti <- t(Kij_ti)
-  W <- Kij_ti/sum(Kij_ti)
-  
-  p12_nonMoyenne <- W*vecx
-  p12_nonMoyenne <- as.vector (p12_nonMoyenne)
-  p13_nonMoyenne <- W*(vecx)^2
-  p13_nonMoyenne <- as.vector (p13_nonMoyenne)
-  
-  M <- cbind( length(vecx)*p12_nonMoyenne - p12val ,  length(vecx)*p13_nonMoyenne - p13val )
-  return(M)
-}
+################################################################################################
+############################ p1r_t and far_t computation #######################################
+################################################################################################
 
-#################### Observation of distributions in time #########################
-
-# test ( just for Gumbel, X stationary, Z non-sationary with linear growth in location parameter)
-plotd_time <- function(size,locat,mu,scal,shpe){
-  X = rgev(size, loc = locat, scale = scal, shape = shpe)
-  mu_t= c(mu[1],mu[length(mu)/4],mu[length(mu)/2], mu[3*length(mu)/4], mu[length(mu)])
-  plot(density(X),col="black",)
-  for (i in 1:length(mu_t)){
-    Z = rgev(size, loc = mu_t[i], scale = 1, shape = 0)
-    lines(density(Z),col="gray")
-  }
-}
-
-n=1000
-mu = seq(0, 5, length.out = n) 
-plotd_time(n,0,mu,1,0)
-
-mu = seq(0, 3, length.out = n) 
-plotd_time(n,0,mu,1,0.2)
-
-
-########################### Simulate W-class trajectories with non-sationnary Z #################
-
-## we chose to fix muZ or sigmaZ
-simulWclass_nonStationnary <-function(m,n,N,ksiX,ksiZ,sigX,muX=0,muZ=0,sigZ=0,unknownMu=TRUE){#sigZ=NA
-  
-  ## This fonction must recive shapes paremeter of the same sign and different from zero
-  ## between muZ and sigZ, only one must be an imput of the fonction and it will help us find the other one
-  ## unknowkMu=TRUE says us that muZ is the unknowm parameter by default. unknown=FALSE means sigZ is now the unknown parameter
-  ## between muZ and sigZ one must be 0 and the other one a vector
-  ## muX=0 by default but it can be modified
-  
-  # argument a montre quand on fait help
-  # pas m,n comme parametre
-  
-  ## -> verification de taille
-  
-  if (sign(ksiX)!=sign(ksiZ)){
-    stop("X and Z can not be W-class, shape parameters must have the same sign")
-  }
-  
-  if (ksiX==0|ksiZ==0){#xxx
-    stop(" trayectories with shape parameter equal to 0 are always W-class. This case is not treated in this fonction")
-   
-  }
-  support <- muX - sigX/ksiX
-  if (unknownMu==FALSE){
-    if (sigZ!=0){stop("Scale parameter of Z must be unknown")}
-    muZ.vec <- muZ
-    sigZ.vec <- rep(sigZ,n)
-    for (i in 1:n){
-      sigZ.vec[i] <- (support - muZ.vec[i])*(-ksiZ)
+p1rfarW_temps<- function(lam.mat,k.mat,r.mat,lowerbnd=10^(-5)){
+  n = dim(lam.mat)[1]
+  N = dim(lam.mat)[2]
+  p1r.mat = matrix(0,n,N)
+  for (j in 1:N){#  for each trajectory
+    lam.vec = lam.mat[,j]
+    k.vec = k.mat[,j]
+    r.vec = r.mat[,j]
+    p1r.vec = p1r.mat[,j]
+    for (i in 1:n){ # for each t in the trajectory
+      p1r_t <- laplaceWeibull(r.vec[i]-1,lam.vec[i],k.vec[i],lowerbnd=lowerbnd)
+      p1r.vec[i] = p1r_t
     }
-  }
-  if (unknownMu ==TRUE){
-    if (muZ!=0){stop("Location parameter of Z must be unknown")}
-    sigZ.vec <- sigZ
-    muZ.vec <- rep(muX,n)
-    for (i in 1:n){
-      muZ.vec[i] <- support + sigZ.vec[i]/ksiZ
-    }
-  }
-  matX=matrix(0,nrow=m,ncol=N)
-  matZ=matrix(0,nrow=n,ncol=N)
-  for(j in 1:N){
-    matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
-    matZ[,j] <-rgev(n, loc=muZ.vec, scale=sigZ.vec, shape=ksiZ)
-  }
-  return (list("matX"=matX,
-               "matZ"=matZ,
-               "lam"=((sigX/ksiX)/(sigZ.vec/ksiZ))^(1/ksiX),
-               "k"=ksiX/ksiZ,"mu_Z"=muZ.vec,"sigma_Z"=sigZ.vec))
+    p1r.mat[,j] <- p1r.vec
+  }  
+  far.mat <- 1 - 1 / (r.mat * p1r.mat)
+  return( list("p1r"=p1r.mat,"far"=far.mat) )
 }
 
-size=200
-sigma <- seq(1, 3, length.out = size)
-tt <- seq.int(size)/size
-simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=1,ksiZ=1.2,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
 
-simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.20,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) # better for visualisation
+#### Function that applies optim/gmm(modified) method to multiple trajectories {(X)t,(Z)t}
+#### for Gumbel trayectories and Zt woth linear trend on muz
 
-# more general foction, where we can have a variable shape parameters or equal to 0:
-# PATENTHESIS PROBLEM !!
+FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec,methode="optim"){
+  theta_theo <- 1 / exp(muZ.vec)
+  p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+  matX <- matrix(nrow=m,ncol=N)
+  matZ <- matrix(nrow=n,ncol=N)
+  matp <- matrix(nrow=n,ncol=N)
+  for (j in 1:N){
+    matX[,j] <- rgev(m, loc = muX.vec, scale = sigX.vec, shape = 0)
+    matZ[,j] <- rgev(n, loc = muZ.vec, scale = sigZ.vec, shape = 0)
+  }
+  if (methode=="optim"){
+    matp<-P12_P13_estimation(matX,matZ,tt,tt,h,kern=dEpan)
+    thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  }
+  if (methode=="gmm"){
+    GZ<-matGZ_func(matX,matZ)
+    thetahat<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+  }
+  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
+  p1r_mean <- rowMeans(p1rfar$p1r)
+  plot(tt,p1r_t_theo,type="l",col="red",xlab="time",ylab="p1r_t", main=paste("evolution over time of p1r with r=",r))
+  lines(tt,p1r_mean)
+  for (i in 1:N){
+    lines(tt,p1rfar$p1r[,i],col="gray")
+  }
+  return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean, "p1rmean"=p1r_mean))
+}
+
+################################################################################################
+############################ Trajectory simulations ############################################
+################################################################################################
+
+#### Simulate W-class trajectories with non-sationnary Z 
+
 simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location"){
   
   if (ksiX!=0){
@@ -1119,13 +790,13 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
         stop("Z's parameters are not from the same length")
       }
       
-      
       # support value
       support <- muX - sigX/ksiX
       # We impose the condition of equal support
       ksiZ <- sigZ/(muZ - support)
       # Verification. Shape parameters must be of the same sign
-      
+    }
+    
       for (i in 1:n){
         ksiZ_i<- as.numeric(ksiZ[i])
         if ((sign(ksiZ_i)==sign(ksiX))==FALSE){
@@ -1133,7 +804,6 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
         }
       }
       
-    }
     matX<-matrix(nrow=m,ncol=N)
     matZ<-matrix(nrow=n,ncol=N)
     
@@ -1151,108 +821,94 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
                "mu_Z"=muZ,
                "sig_Z"=sigZ,
                "ksi_Z"=ksiZ))
-}
-# if ksiX==0
-if (ksiX==0){
-  n <- length(sigZ)
-  # We remind that if our shape inputs are just a value, the sample size will be 1
+  # if ksiX==0
+  if (ksiX==0){
+    n <- length(sigZ)
+    # We remind that if our shape inputs are just a value, the sample size will be 1
+    matX<-matrix(nrow=m,ncol=N)
+    matZ<-matrix(nrow=n,ncol=N)
+    if (n == 1){
+      warning("Z's scale parameters length will give us the size of this strajectory")
+      }
+    # In this case we must known all the parameters
+    if (is.null(sigZ)){
+      stop("All Z parameters must be unknown")
+      }
+    if (is.null(muZ)){
+      stop("All Z parameters must be unknown")
+      }
+    if (is.null(ksiZ)){
+      stop("All Z parameters must be unknown")
+      }
+    # ksiZ will be re defined as 0 as precaution
+    ksiZ<-rep(0,n)
   
-  matX<-matrix(nrow=m,ncol=N)
-  matZ<-matrix(nrow=n,ncol=N)
-  
-  if (n == 1){
-    warning("Z's scale parameters length will give us the size of this strajectory")
-  }
-  
-  # In this case we must known all the parameters
-  if (is.null(sigZ)){
-    stop("All Z parameters must be unknown")
-  }
-  if (is.null(muZ)){
-    stop("All Z parameters must be unknown")
-  }
-  if (is.null(ksiZ)){
-    stop("All Z parameters must be unknown")
-  }
-  
-  # ksiZ will be re defined as 0 as precaution
-  ksiZ<-rep(0,n)
-  
-  # Verification that X's parameters are just values
-  if (length(muX)!=1 | length(sigX)!=1 | length(ksiX)!=1){
-    stop("X's parameters must be of just 1 value")
-  }
-  # Z's parameters must be of the same length
-  if (length(muZ) == 1) {
-    muZ <- rep(muZ,n)
-  }
-  if (length(sigZ) == 1) {
-    sigZ <- rep(sigZ,n)
-  }
-  if (length(muZ)!=n){
-    stop("Z's parameters are not from the same length")
-  }
-  if (length(sigZ)!=n){
-    stop("Z's parameters are not from the same length")
-  }
-  
-  for(j in 1:N){
-    matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
-    for(i in 1:n)
-      matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
+    # Verification that X's parameters are just values
+    if (length(muX)!=1 | length(sigX)!=1 | length(ksiX)!=1){
+      stop("X's parameters must be of just 1 value")
+      }
+    # Z's parameters must be of the same length
+    if (length(muZ) == 1) {
+      muZ <- rep(muZ,n)
+      }
+    if (length(sigZ) == 1) {
+      sigZ <- rep(sigZ,n)
+      }
+    if (length(muZ)!=n){
+      stop("Z's parameters are not from the same length")
+      }
+    if (length(sigZ)!=n){
+      stop("Z's parameters are not from the same length")
+      }
+    for(j in 1:N){
+      matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
+      for(i in 1:n){
+        matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
 }
 
 return (list("matX"=matX,
              "matZ"=matZ,
              "lam"=exp((muX-muZ)/sigX),
              "k"=sigX/sigZ))
-}
-}
+  }
+  }
 
+############################ Less general fonctions  ############################################
 
-
-##########################3
-# W-class distributions in time
-
-# Fonction no longuer useful, it must be modified
-plotd_time_Wclass <- function(m,n,N,ksiX,ksiZ,sigX,tt.vec,b.vec,muX=0,muZ=0,sigZ=0){
-  
-  if (sigZ == 0) { sigZ = sigX } 
-  muZ <- matrix(nrow=n,ncol=N)
-   
-  for (i in 1:n){
-      muZ[i] <- muX + sigZ/ksiZ - sigX/ksiX - b.vec[i]*tt.vec[i]}
-  
-  matX <- matrix(nrow=m,ncol=N) 
-  matZ <- matrix(nrow=n,ncol=N) 
-  
-  #for (j in 1:N){
-   # matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
-    #matZ[,j] = (muZ+b.vec*tt.vec) + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
-    #}
-  X = rgev(m, loc = muX, scale = sigX, shape = ksiX)
-  muZ_t= c(muZ[1],muZ[length(muZ)/4],muZ[length(muZ)/2], muZ[3*length(muZ)/4], muZ[length(muZ)])
-  tt.vec_t= c(tt.vec[1],tt.vec[length(muZ)/4],tt.vec[length(muZ)/2], tt.vec[3*length(muZ)/4], tt.vec[length(muZ)])
-  b.vec_t= c(b.vec[1],b.vec[length(muZ)/4],b.vec[length(muZ)/2], b.vec[3*length(muZ)/4], b.vec[length(muZ)])
-  
+# plot of distribution in time( just for Gumbel, X stationary, Z non-sationary with linear growth in location parameter)
+plotd_time <- function(size,locat,mu,scal,shpe){
+  X = rgev(size, loc = locat, scale = scal, shape = shpe)
+  mu_t= c(mu[1],mu[length(mu)/4],mu[length(mu)/2], mu[3*length(mu)/4], mu[length(mu)])
   plot(density(X),col="black",)
-  for (i in 1:length(muZ_t)){
-    Z = rgev(n, loc = muZ_t[i]+b.vec_t[i]*tt.vec_t[i], scale = sigZ, shape = ksiZ)
+  for (i in 1:length(mu_t)){
+    Z = rgev(size, loc = mu_t[i], scale = 1, shape = 0)
     lines(density(Z),col="gray")
   }
-  
 }
-b=0.5
-tt <- seq.int(1000)/1000
-plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.05,ksiZ=-0.05,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
-plotd_time_Wclass(m=1000,n=1000,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,tt.vec=tt,b.vec=b,sigZ=1)
+
+# Simulation of multiple stationnary {(X)t,(Z)t} W-class trajectories
+simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0,graph=TRUE){
   
-##############  Statistiques tests for tre transfomation fonction f(W(lambda,k))->W(1,1) ######
-
-# N trajectories of Weibull sample of size n and parameters lambda,k
-k=0.8
-lambda= 0.2
-rweibull(20,k,lambda)
-
+  if (sigZ == 0) { sigZ = sigX } 
+  if (supportauto == TRUE){ muZ <- muX + sigZ/ksiZ - sigX/ksiX }
+  matX <- matrix(rep(0,m*N),nrow=m,ncol=N) 
+  matZ <- matrix(rep(0,n*N),nrow=n,ncol=N) 
+  for (j in 1:N){
+    matX[,j] = muX + (sigX/ksiX)*( (-log(runif(m)))^(-ksiX) - 1 )  
+    matZ[,j] = muZ + (sigZ/ksiZ)*( (-log(runif(n)))^(-ksiZ) - 1 )  
+  }
+  if (graph==TRUE){
+    plot(density(matX[,1]),
+         main="Kernel density estimates \nfor the first X sample (black, counterfactual),\n and the first Z sample (red, factual)",
+         cex.main=0.8,
+         xlim=c(-4,12))
+    lines(density(matZ[,1]),col="red")
+  }
+  return(list("matX"=matX,
+              "matZ"=matZ,
+              "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
+              "k"=ksiX/ksiZ) 
+  )  
+}
 
 
