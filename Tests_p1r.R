@@ -1,13 +1,276 @@
-##################  Tests for fsolve(), optim() and estimation of p1rt ############
-###################################################################################
+################################################################################################
+################################################################################################
+### This file contains test executions of the functions in  p.R                              ###
+################################################################################################
+################################################################################################
 
-########################### Visualisation of teh solution ######################## 
-library(fields)
+
+################################################################################################
+#### 1. p12_t observations                                                                  ####
+################################################################################################
+
+
+##############################   Test trajectories   ###########################################
+#                          ( with known theoretic p1r)                                         #
+
+library(evd)
+library(ggplot2)
+
+set.seed(Sys.time())
+
+
+#### Gumbel trajectories  - (set.seed(292))
+
+size <-  250*4
+rp <- 50
+tt <- seq.int(size)/size
+mu = 2 + seq(0, 5, length.out = size) 
+X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
+Z = rgev(size, loc = mu, scale = 1, shape = 0)
+theta_theo <- 1 / exp(mu)
+p12_theo <- 1 / (1 + theta_theo)
+
+#### Frechet trajectories - set.seed(304)
+
+size <-  250 * 4
+rp <- 50
+tt <- seq.int(size)/size
+sigma <- seq(1, 2, length.out = size)
+xi = 0.5
+x = rgev(size * 1/4, loc = 1, scale = xi, shape = xi)
+z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi)
+theta_theo <- sigma^(-1 / xi)
+p12_theo <- 1 / (1 + theta_theo)
+G_theo <- function(z) pgev(z, loc = 1, scale = xi, shape = xi)
+far_theo_rp <- (1 - theta_theo) * (1 - 1/rp)
+
+
+##############################   p12_t and CI   ################################################
+#                       (for just 1 trajectory , N = 1)                                        #
+
+p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
+ic<-IC(X,Z,tt,tt,0.11) 
+df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,heo=p12_theo)
+p12plot<-ggplot(df,aes(x=tt,y=p12_hat)) + geom_line(colour="red")  +
+  geom_line(aes(y=p12_theo), colour="black")+
+  geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) +
+  ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
+p12plot
+
+
+##############################  Quality of convergence   ########################################
+
+# Computation of multiple samples (X,Z)
+N <- 10
+sigma <- seq(1, 2, length.out = size)
+xi = 0.5
+samplex <- NULL; for (i in 1:N){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+samplez <- NULL; for (i in 1:N){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+
+# Computation of p12_hat_sample for each (Xi,Zi)
+p12_hat_samples <- matrix(0,size,N); ic_samples_high <- matrix(0,size,N); ic_samples_low <- matrix(0,size,N)
+for (i in 1:N){
+  p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
+  ic_samples_high[,i] <- ic_samples_high[,i] + as.vector(IC(samplex[,i],samplez[,i],tt,tt,0.11)$high)
+  ic_samples_low[,i] <- ic_samples_low[,i] + as.vector(IC(samplex[,i],samplez[,i],tt,tt,0.11)$low)
+}
+
+# Computation on average for big N
+p12_hat_moyen <- rowMeans(as.matrix(p12_hat_samples))
+ic_samples_high <- rowMeans(as.matrix(ic_samples_high)); ic_samples_low <-rowMeans(as.matrix(ic_samples_low))
+
+# Plot
+library(ggplot2)
+df <-data.frame(x=tt,y=p12_hat_moyen,z1=ic_samples_low , z2=ic_samples_high ,theo=p12_theo)
+p12plot<-ggplot(df,aes(x=tt,y=p12_hat_moyen)) + geom_line(colour="red") + 
+  geom_line(aes(y=p12_theo), colour="black")+ 
+  geom_ribbon(aes(ymin=ic_samples_low, ymax=ic_samples_high), linetype=2, alpha=0.1) + 
+  ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
+p12plot
+
+# Error between p12_theo and p12_hat
+p12_error <- abs(p12_theo - p12_hat_moyen)
+plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
+
+# Incertitude of estimation
+ic_error <- ic_samples_high - ic_samples_low
+plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
+
+# max error evolution within N (Global error)
+Nn=50
+max_error_evolution <- rep(0,Nn)
+for (j in 1:Nn) {
+  samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+  samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+  p12_hat_samples <- matrix(0,size,j)
+  for (i in 1:j){
+    p12_hat_samples[,i] <- p12_hat_samples[,i] + p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11)
+  }
+  p12_hat_moyen <- rowMeans(p12_hat_samples)
+  p12_error <- abs(p12_theo - p12_hat_moyen[j])
+  max_error_evolution[j] <- max(p12_error)
+}
+plot(1:Nn,max_error_evolution)
+
+# Conditional error
+Nn=50
+matrix_p12_moyen <- NULL
+mean_p12 <- matrix(0,size,Nn)
+conditional_error <- matrix(0,size,Nn)
+for (j in 1:Nn) {
+  samplex <- NULL; for (i in 1:j){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+  samplez <- NULL; for (i in 1:j){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+  p12_hat_samples <- NULL; for (i in 1:j){p12_hat_samples<-cbind(p12_hat_samples,p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11))}
+  mean_p12[,j] <- rowMeans(p12_hat_samples)
+  conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
+}
+matplot(x= tt , y= as.matrix(conditional_error), type='l', pch=1, col= 2:5, xlab='tt', ylab = 'error')
+
+Nn=c(5,50,500)
+mean_p12 <- matrix(0,size,length(Nn))
+conditional_error <- matrix(0,size,length(Nn))
+for (j in 1:length(Nn)) {
+  samplex <- NULL; for (i in 1:Nn[j]){samplex <- cbind(samplex,rgev(size * 1/4, loc = 1, scale = xi, shape = xi))}
+  samplez <- NULL; for (i in 1:Nn[j]){samplez <- cbind(samplez,rgev(size, loc = sigma, scale = xi * sigma, shape = xi))}
+  p12_hat_samples <- NULL; for (i in 1:Nn[j]){p12_hat_samples<-cbind(p12_hat_samples,p12_NonPar(samplex[,i],samplez[,i],tt,tt,0.11))}
+  mean_p12[,j] <- rowMeans(p12_hat_samples)
+  conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
+}
+
+matplot(x= tt , y= conditional_error, type='l', pch=1, col= 2:5, xlab='tt', ylab = 'error')
+
+for (j in Nn) {print(j)}
+# rouge,vert, bleu 
+
+################################# Bandwith selection ############################################
+
+#####  Some plots of p12_hat and G(Z) computation with different bandwiths
+h1=0.01; h2=0.1; h3=1
+
+# Gumbel
+p12_g1<-p12_NonPar(X,Z,tt,tt,h1); p12_g2<-p12_NonPar(X,Z,tt,tt,h2); p12_g3<-p12_NonPar(X,Z,tt,tt,h3)
+G_emp_X <- ecdf(X); G_Z <- G_emp(Z)
+df_g<-data.frame(x=tt, y1=p12_g1, y2=p12_g2, y3=p12_g3, theo=p12_theo, g=G_Z)
+hchoix_g<-ggplot(df_g,aes(x=tt,y=G_Z)) + geom_point(colour="#999999",size=0.5, shape=23)+
+  geom_line(aes(y=p12_theo), colour="black")+ geom_line(aes(x=tt,y=p12_g1,colour="red"))+
+  geom_line(aes(x=tt,y=p12_g2,colour="blue"))+ geom_line(aes(x=tt,y=p12_g3,colour="green"))
+hchoix_g
+
+# Frechet
+p12_f1<-p12_NonPar(x,z,tt,tt,h1); p12_f2<-p12_NonPar(x,z,tt,tt,h2); p12_f3<-p12_NonPar(x,z,tt,tt,h3)
+G_emp_x<-ecdf(x); G_z<-G_emp(z)
+df_f<-data.frame(x=tt,y1=p12_f1,y2=p12_f2,y3=p12_f3,theo=p12_theo,g=G_z)
+hchoix_f<-ggplot(df_h_2,aes(x=tt,y=G_z)) + geom_point(colour="#999999",size=0.5, shape=23)+
+  geom_line(aes(y=p12_theo), colour="black")+geom_line(aes(x=tt,y=p12_f1,colour="red"))+
+  geom_line(aes(x=t,y=p12_f2,colour="blue"))+geom_line(aes(x=tt,y=p12_f3,colour="green"))
+hchoix_f
+
+##### Optimal bandwidth computation
+h_seq<-seq(from=0.01, to=1,by=0.02)
+# h_seq <-seq(from=0.1,to=1, by=0.1)
+size <-  250 * 4
+tt <- seq.int(size)/size
+t_eval <- seq.int(size)/size
+
+error_vector<-CV_error(x,z,tt,tt,h_seq,kern= dEpan)
+
+# Error plot 
+plot(x=h_seq, y=error_vector, type="b", lwd=3, col="blue",
+     xlab="Smoothing bandwidth", ylab="LOOCV prediction error")
+h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]; h_opt # optimal bandwith = 0.11
+opt_err <-min(CV_err_h); opt_err # optimal erreur = 0.03589835
+
+
+################## Trajectories with random location parameter ###############################
+
+#### X stationary and Z non stationary with linear trend un location parameter
+
+ui<-rnorm(2); bi<-rnorm(2,mean=1,sd=0.1)
+X1<-rgev(size, loc=ui[1], scale=1, shape=0); X2<-rgev(size, loc=ui[2], scale=1, shape=0)
+Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0); Z2<-rgev(size, loc = ui[2]+bi[2]*t, scale = 1, shape = 0)
+# p12 computation
+p12_1<-p12_NonPar(X1,Z1,tt,tt,0.2); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.2);ic_1<-IC(X1,Z1,tt,tt,0.2) ;ic_2<-IC(X2,Z2,tt,tt,0.2) 
+#plot
+df_Ex <-data.frame(temp=tt,x=p12_1,y=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
+p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
+  geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1)
+p12plot
+
+#### Multiple trajectories
+size <-  250*4
+tt <- seq.int(size)/size
+N <- 2 #number of trajectories
+ui<-rnorm(N) 
+bi<-rnorm(N,mean=1,sd=0.1)
+scale_Z_real=1
+shape_Z_real=0
+Z_real<-Z_real_comp(size,scale=1,shape=0) # "real" factual(Z) and couterfactual(X) run
+X_real<-rgev(size*5, loc=mean, scale=1, shape=0)
+X1<-rgev(size*5, loc=ui[1], scale=1, shape=0) # run from model 1
+Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0)
+X2<-rgev(size*5, loc=ui[2], scale=1, shape=0) # run from model 2
+Z2<-rgev(size, loc = ui[2]+bi[2]*tt, scale = 1, shape = 0)
+
+# "real" p12 , p12_hat and CI of each model 
+p12_real<-p12_NonPar(X_real,Z_real,tt,tt,0.11); p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
+ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
+
+# plot
+df_Ex <-data.frame(temp=tt, x=p12_real, y1=p12_1, y2=p12_2,z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
+p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
+  geom_line(aes(y=p12_2), colour="black")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12_real, colour="blue")
+p12plot
+
+dev.off()
+
+################## World before anthropogenic forcing effets #################################
+
+X1<-rgev(size*5, loc=ui[1], scale=1, shape=0); Z1<-rgev(size, loc = ui[1], scale = 1, shape = 0)# Trajectory world 1
+X2<-rgev(size*5, loc=ui[2], scale=1, shape=0); Z2<-rgev(size, loc = ui[2], scale = 1, shape = 0)# Trajectory world 2
+
+p12_1<-p12_NonPar(X1,Z1,tt,tt,0.11); p12_2<-p12_NonPar(X2,Z2,tt,tt,0.11)
+ic_1<-IC(X1,Z1,tt,tt,0.11) ;ic_2<-IC(X2,Z2,tt,tt,0.11) 
+
+p12hat_moyen<- (p12_1 + p12_2)/2
+
+df_Ex <-data.frame(temp=tt, y1=p12_1, y2=p12_2, y3= p12hat_moyen, z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
+p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
+  geom_line(aes(y=p12_2), colour="blue")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12hat_moyen, colour="green")+
+  geom_hline(yintercept = 0.5) + ggtitle("p02 estimation over time") + ylab("p02") + xlab("time")
+p12plot
+
+################################################################################################
+#### 2. p13_t observations                                                                  ####
+################################################################################################
+
+p13_hat<-p13_NonPar(X,Z,tt,tt,0.11)
+plot(tt, p13_hat)
+p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
+plot(tt, p12_hat)
+
+dev.off()
+
+################################################################################################
+################################################################################################
+### Extension to p1r_t                                                                       ###
+################################################################################################
+################################################################################################
+library(fields); library(pracma)
+
+################################################################################################
+#### 3. lambda_t & k_t values, using different methods                                      ####
+################################################################################################
+
+
+##################  Tests for fsolve(), optim()  ###############################################
+################################################################################################
+
+####  Visualisation of teh solution  
 
 startval_t <- c(0.7, 1.3) 
 phat <-c(1/2, 1/3) 
 phat <-c(0.86, 0.79) 
-fg <- function(theta){functiong(theta,vecx=phat)}
+fg <- function(theta){functionp12p13(theta,vecx=phat)}
 
 lambda <- seq(0.01, 1.5, 0.01)
 k <- seq(0.01, 1.5, 0.01)
@@ -25,78 +288,58 @@ image.plot(lambda, k, p12_mat)
 points(lambda[idx12[1]], k[idx12[2]], col="white", pch=20)
 image.plot(lambda, k, p13_mat)
 points(lambda[idx13[1]], k[idx13[2]], col="white", pch=20)
-#39 186
-# 53  29
-############### (A) fsolve() ###############################3
-library(pracma)
 
-# A.0 We test le fonction that estimates lambda_t k_t for only 1 time
+####  3. fsolve() and fsolve_modif() methods ###################################################
+
+# Estimation of lambda_t k_t for only 1 time t
 J12 <- function(x){jacobianFunctiong12(x[1],x[2])[[1]]
 }
 startval_t <- c(0.7, 1.3) 
 phat <-c(1/2, 1/3) 
 phat <-c(0.86, 0.79) 
-fg <- function(theta){functiong(theta,vecx=phat)}
+fg <- function(theta){functionp12p13(theta,vecx=phat)}
 
 # Using the jacobian
-EGMMweibull <- fsolve(fg,x0=startval_t,J=J12) # Error: C stack usage  7970896 is too close to the limit
-# Using the modified function fsolve3()
-EGMMweibul3 <- fsolve3(fg,x0=startval_t)
+Fsolveweibull <- fsolve(fg,x0=startval_t,J=J12) # Error: C stack usage  7970896 is too close to the limit
+# Using the modified function fsolve_modif()
+Fsolveweibull_modif <- fsolve_modif(fg,x0=startval_t)
 
 
-# A.1 Computation of lambda_t, k_t for each time. X,Z stationary
+# Estimation of lambda_t, k_t for for two stationary trajectories X,Z
 data <- simulWclass(m=100,n=100,N=2,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
 tt <- seq.int(100)/100
 matp<-P12_P13_estimation(data$matX,data$matZ,tt,tt,11,kern=dEpan) 
-theta<-weibullGMMestim(matp$matp12,matp$matp13,truevalues=NULL)
-theta3<-weibullGMMestim3(matp$matp12,matp$matp13,truevalues=NULL) # ... lam= 336.1192 ,k= -2826.279 error...
-# also lam= 0.2871943 ,k= 1.36206 
+theta<-weibullFsolve(matp$matp12,matp$matp13,truevalues=NULL)
+theta3<-weibullFsolve_modif(matp$matp12,matp$matp13,truevalues=NULL) 
 
-###############(B) Optim() ####################################
+####  4. Optim() method ########################################################################
 
-# B.0
-# We test le fonction that estimates lambda_t k_t for only 1 time
-
-## lambda0 and k0 to start the algorithm -> startval_t
+# Estimation of lambda_t k_t for only 1 time t
 startval_t <- c(0.7, 1.3) 
 #startval2_t <- c(0.8, 1.8) 
-
-## Estimated  p12hat_t1 p13hat_t1 ->vecx
-#phat <-c(1/2, 1/3) 
 phat <-c(0.86, 0.79) 
+#phat <-c(1/2, 1/3) 
 
-#lmb:0.3,k:0.8 p13, p12->lmbd:03,k:1.3
+EOptimweibull <- optim(startval_t,fgoptim,method="BFGS",vecx=phat) # Using method BFGS without bound
+EOptimweibull <- optim(startval_t,fgoptim,method="L-BFGS-B",vecx=phat,lower = 0.001) # Using methos L-BFGS-B with bound (no negative parameters)
 
-### Using method BFGS without bound
-EOptimweibull <- optim(c(0.7, 1.3),fg1,method="BFGS",vecx=c(0.86, 0.79))
-#lam= 0.1301583 ,k= 0.7718406 . no convergence
-
-### Using methos L-BFGS-B with bound (no negative parameters)
-EOptimweibull <- optim(c(0.7, 1.3),fg1,method="L-BFGS-B",vecx=c(0.86, 0.79),lower = 0.001)
-# lam= 0.08297448 ,k= 0.4102397 .  convergence
-EOptimweibull <- optim(c(0.5, 0.8),fg1,method="L-BFGS-B",vecx=c(0.86, 0.79),lower = 0.001)
-
-# B.1
-## computation of lambda_t, k_t for each time. X,Z stationary 
-
+# Estimation of lambda_t, k_t for for stationary trajectories X,Z
 data <- simulWclass(m=20,n=20,N=1,ksiX=-0.20,ksiZ=-0.25,sigX=1,sigZ=1)
 tt <- seq.int(20)/20
 matp<-P12_P13_estimation(data$matX,data$matZ,tt,tt,0.1,kern=dEpan) 
 plot(tt,matp$matp13[,1],xlab="t",ylab="p12_hat")
 
-thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)#lam= 0.001 ,k= 1.387237
+thetahat<-weibullOptim (matp$matp12,matp$matp13,truevalues=NULL)#lam= 0.001 ,k= 1.387237
 plot(tt,thetahat$lambdahat[,1], xlab="t",ylab="lambda_hat") # parameter change a llitle bit
 plot(tt,thetahat$khat[,1],xlab="t",ylab="k_hat")
 
+##########  Estimation on p1r
 # p1.10.t for each trayectory
 p1rfarestim <- p1rfarW(thetahat$lambdahat,thetahat$khat,matrix(10,ncol=2,nrow=20)) 
 rvalues <- seq(5,30,by=5)
 p1rfarchoix <- p1rfarW(rep(thetahat$lambdahat[1],6),rep(thetahat$khat[1],6),rvalues)
 
-
-# B.2
 ## computation of lambda_t, k_t for each time. Z_t non stationary and same support
-
 size=20
 tt <- seq.int(size)/size
 mu = 2 + seq(0, 5, length.out = size) 
@@ -105,22 +348,24 @@ Z = rgev(size, loc = mu, scale = 1, shape = 0)
 matp<-P12_P13_estimation(X,Z,tt,tt,0.11,kern=dEpan)
 #plot(tt,matp$matp13,type="l", col="blue")
 #lines(tt,matp$matp12,type="l")
-thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+thetahat<-weibullOptim (matp$matp12,matp$matp13,truevalues=NULL)
 rvalues <- seq(5,30,by=5)
+##########  Estimation on p1r
 p1rfar1<-p1rfarW(rep(thetahat$lambdahat[1],6),rep(thetahat$khat[1],6),rvalues) # t1 and sequence of r
 p1rfarestim <- p1rfarW(thetahat$lambdahat,thetahat$khat,matrix(10,ncol=2,nrow=20))
-# r=10 for all t.vec. Here we can see that here we are taking in consideration time
 
+# p1r_t with r=4 for all times 
 p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(4,ncol=1,nrow=size))
 plot(tt,p1rfar$p1r,type="l",col="blue",xlab="t",ylab="p12_4")
 lines(tt,matp$matp12,col="gray")
 lines(tt,matp$matp13,col="gray")
 
-#########
+################################################################################################
+#### 4. testing the method with "known" W-class X and Z                                     ####
+################################################################################################
 
-################ testing the method with "known" W-class F and CF #############
+####  Using only 1 trajectory {(X)t,(Z)t} (N=1) ################################################
 
-# 1. for 1 trayactory {(X)t,(Z)t} (N=1)
 size <-  200
 tt <- seq.int(size)/size
 muz = 2 + seq(0, 5, length.out = size)
@@ -130,50 +375,49 @@ sigmaz = 1
 r=10 ; cat("r: ", r )
 X = rgev(size * 5, loc = mux, scale = sigmax, shape = 0)
 Z = rgev(size, loc = muz, scale = sigmaz, shape = 0)
-# 2. lambda_t and k_t theorique 
+# lambda_t and k_t theorique 
 sigmax_t <- rep(sigmax,size)
 sigmaz_t <- rep(sigmaz,size)
 k_t_theo <- sigmax_t/sigmaz_t; cat("Thoretic values of k_t: ", k_t_theo )
 muz_t <- muz
 mux_t <- rep(mux, size)
 lambda_t_theo <- exp((mux_t-muz_t)/sigmax_t);cat("Thoretic values of lambda_t: ", lambda_t_theo )
-# 3. p12_t and p13_t theorique
+# p12_t and p13_t theorique
 theta_theo <- 1 / exp(muz)
 p12_t_theo <- 1 / (1 + theta_theo);cat("Thoretic values of p12_t: ", p12_t_theo )
 p13_t_theo <- 1 / (1 + 2*theta_theo); cat("Thoretic values of p13_t: ", p13_t_theo  )
 p1r_t_theo <- 1 / (1 + (r-1)*theta_theo); cat("Thoretic values of p1r_t: ", p1r_t_theo  )
-# 4. p12hat and p13hat
+# p12hat and p13hat
 matp<-P12_P13_estimation(X,Z,tt,tt,0.11,kern=dEpan)
 p12hat_t<-matp$matp12; cat("Estimated values of p12_t: ", p12hat_t  )
 p13hat_t<-matp$matp13; cat("Estimated values of p3r_t: ", p13hat_t  )
 err_p12 <- abs(p12_t_theo - p12hat_t); cat("dif p12: ", err_p12  )
 err_p13 <- abs(p13_t_theo - p13hat_t); cat("dif p13: ", err_p13  )
-# 5. lambdahat_t and khat_t (with optim)
-thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+# lambdahat_t and khat_t (with optim)
+thetahat<-weibullOptim (matp$matp12,matp$matp13,truevalues=NULL)
 lambdahat_t <- thetahat$lambdahat; cat("Estimated values of lambda_t: ", lambdahat_t )
 khat_t <- thetahat$khat; cat("Estimated values of k_t: ", khat_t  )
-optimval_theo<-fg1(c(lambda_t_theo,k_t_theo ),c(p12_t_theo,p13_t_theo)) # with theoretic p12t p13t
+optimval_theo<-fgoptim(c(lambda_t_theo,k_t_theo ),c(p12_t_theo,p13_t_theo)) # with theoretic p12t p13t
 cat("theoretic min of function: ", optimval_theo )
-optimval_hat<-fg1(c(lambdahat_t,khat_t ),c(p12_t_theo,p13_t_theo)) # with estiated p12t p13t
+optimval_hat<-fgoptim(c(lambdahat_t,khat_t ),c(p12_t_theo,p13_t_theo)) # with estiated p12t p13t
 cat("estimated min of function: ", optimval_hat )
 #[1] optimval_theo: 0.07771465, optimval_hat: 0.07810431
-# 6. Comparation between lambdahat_t and lambda_t_theo (same for k)
+# Comparation between lambdahat_t and lambda_t_theo (same for k)
 err_lambda <- abs(lambdahat_t-lambda_t_theo); cat("error in lambda_t estimation: ", err_lambda )
 err_k <- abs(khat_t-k_t_theo); cat("error in k_t estimation ", err_k)
 # il y a toujours beaucoup d'erreur sur k (qui en theorie est constant)
-# 7. computation of p1rhat_t
+# computation of p1rhat_t
 p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size)) # r=4
 cat("estimation of p1r_t: ", p1rfar$p1r )
-# 8. difference between p1r_T theoretic estimated 
+# difference between p1r_T theoretic estimated 
 err_p1r <- abs(p1rfar$p1r - p1r_t_theo); cat("error in p1r_t estimation: ", err_p1r)
 #plot(tt,err_p1r,ylab="p1.5")
 plot(tt,p1r_t_theo,type="l",col="red")
 lines(tt,p1rfar$p1r)
 
+####  Multiple trajectories {(X)t,(Z)t} (N=1) ##################################################
 
-# 2. for multiple trajectories {(X)t,(Z)t}
-
-# Both Gumbel and linear trend un muz. We know two Gumbel have the same support
+# Both Gumbel and Z with linear trend un muz
 
 size <-  50
 tt <- seq.int(size)/size
@@ -184,10 +428,9 @@ sigmaz = 1
 testmoyen<-FastTestforp1r_gumbel(tt,0.11,5,20,20,10,rep(sigmax,size),rep(sigmaz,size),rep(mux,size),muz)
 testmoyen<-FastTestforp1r_gumbel(tt,0.11,5,50*2,50,16,rep(sigmax,size*2),rep(sigmaz,size),rep(mux,size*2),muz)
 
-plot(tt,testmoyen$matp1r[,1], type="l") # 1 trayectory
+plot(tt,testmoyen$matp1r[,1], type="l") # plot of 1 trayectory
 
-# 3. Fonction similar two (2.) but for a type of Frechet, in this case the trajectories are not necessay W-class
-
+# Fonction similar two (2.) but for a type of Frechet, in this case the trajectories are not necessay W-class
 ############# not ready :
 size <-  20
 rp <- 50
@@ -209,7 +452,6 @@ xi = 0.5
 testmoyen<-FastTestforp1r_frechet(tt,0.5,5,size*2,size,10,xi,sigma,rep(1,size*2),sigma)
 
 FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
-  
   theta_theo <- sigma.vec^(-1 / rep(xi,n))
   p12_theo <- 1 / (1 + theta_theo)
   
@@ -223,7 +465,7 @@ FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
   }
   matp<-P12_P13_estimation(matX,matZ,tt,tt,h,kern=dEpan)
   
-  thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL)
+  thetahat<-weibullOptim (matp$matp12,matp$matp13,truevalues=NULL)
   p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
   p1r_mean <- rowMeans(p1rfar$p1r)
   
@@ -235,22 +477,19 @@ FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
   return(list("matp1r"=p1rfar$p1r,"matfar"=p1rfar$far,"p1rmean"=p1r_mean))
 }
 
-################ Simulation of W-class trajectories with F = non-stationary ###########3
+################################################################################################
+#### 5. Simulation of W-class trajectories with F = non-stationary                          ####
+################################################################################################
 
 size=200
 tt <- seq.int(size)/size
 sigma <- seq(1, 2, length.out = size)
-
 simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.2,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) 
-# obs: we still need to add a the fonctionality for testing if all parameters given creater W-class trajectory or not
-# And also define warnings or errors in the focntion because here we are assuming the its goning to be "well used"
-
 G<-ecdf(simul$matX)
 plot(tt,G(simul$matZ))
 
 
-# plot in time
-# Fast visualisation of de evolution on the trajectories {(X)t,(Z)t}
+####  Visualisation of de evolution on the trajectories {(X)t,(Z)t} ############################
 a<-length(simul$mu_Z)
 muZ_t= c(simul$mu_Z[1],simul$mu_Z[a/4],simul$m_Z[a/2], simul$mu_Z[3*a/4], simul$mu_Z[a])
 sigZ_t = c(sigma[1],sigma[a/4],sigma[a/2], sigma[3*a/4], sigma[a])
@@ -265,12 +504,8 @@ Z4 = rgev(size, loc = muZ_t[4], scale = sigZ_t[4], shape = 0.25)
 lines(density(Z4),col="purple")
 
 
-### More general Simul W-class examples:
-# FOR KSI=0 THE FONCTION IS NOT WORKING BECAUSE THERE IS A PARENTHESIS PROBLEM
-
 size=20
 tt <- seq.int(size)/size
-
 # ksi!=0 , ksiZ constant, sigZ variable, mu unknown
 sigma <- seq(1, 3, length.out = size)
 simul1<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=NULL,sigZ=sigma,unknown="location")
@@ -278,7 +513,6 @@ simul1<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.
 sigma <- seq(1, 3, length.out = size)
 ksi <- seq(0.1,0.2,length.out = size)
 simul2<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0,ksiZ=ksi,muZ=NULL,sigZ=sigma,unknown="location")
-
 # ksi!=0 , ksiZ constant, sigZ variable, sig unknown
 mu <- seq(1, 2, length.out = size)
 simul3<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=mu,sigZ=NULL,unknown="scale")
@@ -304,40 +538,25 @@ simul8<-simulWclass_nonStationnary(m=size,N=1,ksiX=0,sigX=1,muX=0.2,ksiZ=0,muZ=m
 
 
 
-###################### lambdahat_t and khat_t using gmm ###################
-
-# functions needed
-# matGZ_func, weibullGMM_NonStationaire_startval_1, weibullGMM_NonStationaire, function_gmm_noyaux,laplaceWeibull, funclaplace, dEpan.
+################################################################################################
+################################################################################################
+### lambda_t & k_tUsing GMM                                                                  ###
+################################################################################################
+################################################################################################
 library(gmm)
 
-size <- 200
-tt <- seq.int(size)/size
-mu = 2 + seq(0, 5, length.out = size) 
-X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
-Z = rgev(size, loc = mu, scale = 1, shape = 0)
-
-h=0.11
-r=4
-GZ<-matGZ_func(X,Z)
-
-## Starting from lambda_(t-1), k_(t-1) at each t>1 save us time : 
-param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
-# system.time(param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))#lam= 0.002590114 ,k= 1.304888  
-# system tye: 3.055 s
-
-system.time(param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))
-# system time: 14.580 s
-# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061, lam= 0.001947633 ,k= 0.7214428 
-
-p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
+# functions needed for gmm
+# matGZ_func, weibullGMM_NonStationaire_startval_1, weibullGMM_NonStationaire, 
+# function_gmm_noyaux,laplaceWeibull, funclaplace, dEpan.
 
 
-######### Comparison between de p1r_t estimation of both gmm an optim   #################
+################################################################################################
+#### 6. p1r_t estimation of both GMN and Optim                                              ####
+################################################################################################
 
-# (This quick comparisons are done with this Gumbels because we know they are W-class and we know p1r theorique)
 
-####### Using only 1 trajectory {(X)t, (Z)t} (N=1)
-split.screen(c(2,2))
+####  Using only 1 trajectory {(X)t, (Z)t} (N=1)       #########################################
+
 size <- 200
 tt <- seq.int(size)/size
 mu = 2 + seq(0, 5, length.out = size) 
@@ -346,28 +565,26 @@ Z = rgev(size, loc = mu, scale = 1, shape = 0)
 r=10
 h=0.11
 
+split.screen(c(2,2))
 # GMM
 GZ<-matGZ_func(X,Z)
 param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
-# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061
 p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
 # Optim
 matp<-P12_P13_estimation(X,Z,tt,tt,h,kern=dEpan)
-thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL) # lam= 1e-05 ,k= 0.2834847 
+thetahat<-weibullOptim (matp$matp12,matp$matp13,truevalues=NULL) # lam= 1e-05 ,k= 0.2834847 
 p1r_opt<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size))
 # theo
 theta_theo <- 1 / exp(mu)
 p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
-screen(4) # change for 2,3,4
+screen(4) # change to 2,3,4
 plot(tt,p1r_t_theo,col="red",type="l")
 lines(tt,p1r_gmm$p1r,col="green")
 lines(tt,p1r_opt$p1r,col="blue")
 # dev.off()
 
-######## Multiple trajectories {(X)t, (Z)t} (N=1) , comparison
+####  Multiple trajectories {(X)t, (Z)t} (N=1)         #########################################
 
-# attention, les vales de X,Z seront different à chaque fois quòn fait toure la fonction 
-# les aleurs que prennent les deux méthodes seront differents
 size <- 250
 tt <- seq.int(size)/size
 mu = 2 + seq(0, 5, length.out = size)
@@ -382,65 +599,56 @@ plot(tt,p1r_t_theo,col="red",type="l")
 lines(tt,plotoptim$p1r_mean, col="blue")
 lines(tt,plotgmm$p1r_mean,col="green")
 
-###################### Exemples with frechet
-################################### not ready
-split.screen(c(2,2))
-size <-  200
-tt <- seq.int(size)/size
-sigma <- seq(1, 2, length.out = size)
-xi = 0.5
-x = rgev(size * 1/4, loc = 1, scale = xi, shape = xi)
-z = rgev(size, loc = sigma, scale = xi * sigma, shape = xi)
-r=10
-h=0.2
+################################################################################################
+#### 7. Testing GMM approach                                                                ####
+################################################################################################
 
-GZ <-matGZ_func(x,z)
-param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
-# for last t : lam= 0.2251242 ,k= 0.9904941 
-p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
-# Optim
-matp<-P12_P13_estimation(x,z,tt,tt,h,kern=dEpan)
-thetahat<-weibullGMMestim4 (matp$matp12,matp$matp13,truevalues=NULL) # for last t:lam= 0.2251274 ,k= 0.9895834  
-p1r_opt<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=1,nrow=size))
-# theo
-theta_theo <- sigma^(-1 / xi)
-p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
-
-screen(1) # change for 2,3,4
-plot(tt,p1r_t_theo,col="red",type="l")
-lines(tt,p1r_gmm$p1r,col="green")
-lines(tt,p1r_opt$p1r,col="blue")
-
-######################################  Test of the gmm méthod ######################################
-#####################################################################################################
-set.seed(401)
-# set.seed(Sys.time())
+######### lambda_t & k_t  using GMM with different starting value methodology ##################
 
 size <- 200
 tt <- seq.int(size)/size
-
-# CAS 1
 mu = 2 + seq(0, 5, length.out = size) 
 X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
 Z = rgev(size, loc = mu, scale = 1, shape = 0)
 
 h=0.11
-# r=4
-
-### Theoretic lambda et k 
-k_t_theo <- rep(1,size) # sigx/sigz
-lambda_t_theo <- exp((0-mu)/1) # exp((mux-muz)/sigx)
-
-### Calcul G(Z)_t
 GZ<-matGZ_func(X,Z)
 
-############################## Comparation of the two initialisation méthods ######################################
+## Starting from lambda_(t-1), k_(t-1) at each t>1: 
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+# system.time(param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))#lam= 0.002590114 ,k= 1.304888  
+# system tye: 3.055 s
+# Starting always from the same value
+system.time(param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))
+# system time: 14.580 s
+# output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061, lam= 0.001947633 ,k= 0.7214428 
+
+
+####  p1r_t  estimation   ######################################################################
+r=4
+p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
+
+######### Deeper comparison of initialisation methods ############################################
+##################################################################################################
+
+set.seed(401)
+# set.seed(Sys.time())
+
+size <- 200
+tt <- seq.int(size)/size
+mu = 2 + seq(0, 5, length.out = size) 
+X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
+Z = rgev(size, loc = mu, scale = 1, shape = 0)
+h=0.11
+# r=4
+k_t_theo <- rep(1,size) # sigx/sigz 
+lambda_t_theo <- exp((0-mu)/1) # exp((mux-muz)/sigx)
+GZ<-matGZ_func(X,Z)
 
 param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
-
 param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
 
-####### On peut voir qu'ils ne donnent pas les meme resultats 
+#### Observations : We don't have the sames results  
 plot(tt,k_t_theo,type="l", main=" k estimation")
 lines(tt,param$khat,col="blue")
 lines(tt,param2$khat,col="red")
@@ -449,7 +657,7 @@ plot(tt,lambda_t_theo,type="l", main="lambda estimation")
 lines(tt,param$lambdahat,col="blue")
 lines(tt,param2$lambdahat,col="red")
 
-######################### Valeurs de la fonction function_gmm_noyaux ##################
+######################### Visualisation of the system's solution ##################
 
 library(fields)
 
@@ -475,7 +683,7 @@ points(lambda[idx12[1]], k[idx12[2]], col="white", pch=20)
 image.plot(lambda, k, dif_p13_mat)
 points(lambda[idx13[1]], k[idx13[2]], col="white", pch=20)
 
-###########################  convergence de la méthode  ##########################################
+###########################  convergence of the method  ##########################################
 
 fg_noyaux <- function(theta,vecx){function_gmm_noyaux(theta,vecx=GZ,index=150,tt.vec=tt,t_eval.vec=tt,bandwidth=h)}
 
@@ -493,4 +701,26 @@ EGMMweibull_NonStationary
 
 summary(EGMMweibull_NonStationary)
 
+
+################################################################################################
+#### 8. Visialusation of trajectory distributions evolution in time                         ####
+################################################################################################
+
+n=1000
+mu = seq(0, 5, length.out = n) 
+plotd_time(n,0,mu,1,0)
+
+mu = seq(0, 3, length.out = n) 
+plotd_time(n,0,mu,1,0.2)
+
+
+################################################################################################
+#### 9. Simulation of W-class trajectories with non-sationnary Z                            ####
+################################################################################################
+
+size=200
+sigma <- seq(1, 3, length.out = size)
+tt <- seq.int(size)/size
+simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=1,ksiZ=1.2,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
+simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.20,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) # better for visualisation
 
