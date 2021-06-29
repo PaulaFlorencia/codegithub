@@ -718,9 +718,34 @@ plotd_time(n,0,mu,1,0.2)
 #### 9. Simulation of W-class trajectories with non-sationnary Z                            ####
 ################################################################################################
 
-size=200
-sigma <- seq(1, 3, length.out = size)
-tt <- seq.int(size)/size
-simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=1,ksiZ=1.2,sigX=0.7,muX=0,muZ=0,sigZ=sigma,unknownMu=TRUE) 
-simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.20,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) # better for visualisation
+#### Examples of trayectories###################################################################
+
+n=100
+m=200
+tt <- seq.int(n)/n
+N=1
+ksi_x<-0.2
+sig_x<-0.7
+mu_x<-0
+
+# Example 1
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=rep(0.25,n),sigZ=seq(1.0, 1.1, length.out = n),unknown="location")
+# Example 2
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.25, 0.30, length.out = n),sigZ=seq(1.0, 1.1, length.out = n),unknown="location")
+# Example 3
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.25, 0.30, length.out = n),sigZ=seq(1.0, 1.5, length.out = n),unknown="location")
+# Exemple 4
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.25, 0.30, length.out = n),muZ=seq(1.0, 1.1, length.out = n),unknown="scale")
+# Exemple 5
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.20, 0.24, length.out = n),muZ=seq(1.0, 1.1, length.out = n),unknown="scale") 
+# Exemple 6
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.20, 0.23, length.out = n),muZ=rep(1.1,n),unknown="scale", graph="FALSE")
+# Exemple 7
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,sigZ=seq(0.7, 1, length.out = n),muZ=rep(1.1,n),unknown="shape", graph="FALSE")
+# Example 8
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,sigZ=seq(0.7, 1, length.out = n),muZ=seq(0, 3, length.out = n),unknown="shape", graph="FALSE")
+# Example 9
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n),sigZ=seq(1, 3, length.out = n),unknown="scale", graph="FALSE")
+# Example 10
+simul<-simulWclass_nonStationnary_general(m=200,N=1,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n),sigZ=rep(1,n),muZ=seq(0, 1, length.out = n), graph="FALSE")
 
