@@ -34,12 +34,23 @@ p12_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
   p12_hat <- W %*% G_Z
 }
 
-#### p13 Non parametric computation ##############################################################
+#### p13 and p1r Non parametric computation ##############################################################
 
 p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
   # G_Z computation
   G_emp_carre <- ecdf(X)
   G_Z_carre <- (G_emp_carre(Z))^2
+  # W computation
+  Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
+  W <- Kij / rowSums(Kij)
+  # p12_hat computation
+  p13_hat <- W %*% G_Z_carre
+}
+
+p1r_NonPar <- function(X,Z,r,tt,t_eval,h,kern= dEpan){
+  # G_Z computation
+  G_emp_carre <- ecdf(X)
+  G_Z_carre <- (G_emp_carre(Z))^(r-1)
   # W computation
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
@@ -679,7 +690,7 @@ FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
 
 #### Simulate W-class trajectories with non-sationnary Z 
 
-simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location", graph="TRUE"){
+simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location", graph=TRUE){
   
   if (ksiX!=0){
     if (unknown == "location"){
@@ -811,25 +822,28 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
       matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
       for(i in 1:n)
         matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
+    
+    lam_t <- ((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX)
+    k_t <- ksiX/ksiZ
   }
   
   if (ksiX==0){
     n <- length(sigZ)
     # We remind that if our shape inputs are just a value, the sample size will be 1
-    matX<-matrix(nrow=m,ncol=N)
-    matZ<-matrix(nrow=n,ncol=N)
+    # matX<-matrix(nrow=m,ncol=N)
+    # matZ<-matrix(nrow=n,ncol=N)
     if (n == 1){
       warning("Z's scale parameters length will give us the size of this strajectory")
       }
     # In this case we must known all the parameters
     if (is.null(sigZ)){
-      stop("All Z parameters must be unknown")
+      stop("For Gumbel trajectories all Z parameters must be unknown")
       }
     if (is.null(muZ)){
-      stop("All Z parameters must be unknown")
+      stop("For Gumbel trajectories all Z parameters must be unknown")
       }
     if (is.null(ksiZ)){
-      stop("All Z parameters must be unknown")
+      stop("For Gumbel trajectories all Z parameters must be unknown")
       }
     # ksiZ will be re defined as 0 as precaution
     ksiZ<-rep(0,n)
@@ -851,6 +865,10 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
     if (length(sigZ)!=n){
       stop("Z's parameters are not from the same length")
     }
+    
+    k_t <- sigX/sigZ
+    lam_t <- exp((muX-muZ)/sigX)
+    
   }
   
   matX<-matrix(nrow=m,ncol=N)
@@ -862,30 +880,31 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
       matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
     
   }
-  
-  if (graph=="TRUE"){
+  if (graph==TRUE){
     
+    n <-length(ksiZ)
+
     muZ_t <- c(muZ[1],muZ[n/4],muZ[n/2], muZ[3*n/4], muZ[n])
     sigZ_t <- c(sigZ[1],sigZ[n/4],sigZ[n/2], sigZ[3*n/4],sigZ[n])
     ksiZ_t <- c(ksiZ[1],ksiZ[n/4],ksiZ[n/2], ksiZ[3*n/4], ksiZ[n])
-    
-    plot(density(simul$matX),col="red")
-    
-    Z1 = rgev(size, loc = muZ_t[1], scale = sigZ_t[1], shape = ksiZ_t[1])
+
+    plot(density(matX[,1]),col="red")
+
+    Z1 = rgev(n, loc = muZ_t[1], scale = sigZ_t[1], shape = ksiZ_t[1])
     lines(density(Z1),col="gray")
-    Z2 = rgev(size, loc = muZ_t[2], scale = sigZ_t[2], shape = ksiZ_t[2])
+    Z2 = rgev(n, loc = muZ_t[2], scale = sigZ_t[2], shape = ksiZ_t[2])
     lines(density(Z2),col="green")
-    Z3 = rgev(size, loc = muZ_t[3], scale = sigZ_t[3], shape = ksiZ_t[3])
+    Z3 = rgev(n, loc = muZ_t[3], scale = sigZ_t[3], shape = ksiZ_t[3])
     lines(density(Z3),col="blue")
-    Z4 = rgev(size, loc = muZ_t[4], scale = sigZ_t[4], shape = ksiZ_t[4])
+    Z4 = rgev(n, loc = muZ_t[4], scale = sigZ_t[4], shape = ksiZ_t[4])
     lines(density(Z4),col="purple")
-  }
+    }
   
   # Calculation of lambda an k
   return (list("matX"=matX,
                "matZ"=matZ,
-               "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
-               "k"=ksiX/ksiZ,
+               "lam"=lam_t,
+               "k"=k_t,
                "mu_Z"=muZ,
                "sig_Z"=sigZ,
                "ksi_Z"=ksiZ))
