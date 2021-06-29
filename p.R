@@ -679,7 +679,7 @@ FastTestforp1r_gumbel <- function(tt,h,r,m,n,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
 
 #### Simulate W-class trajectories with non-sationnary Z 
 
-simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location"){
+simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location", graph="TRUE"){
   
   if (ksiX!=0){
     if (unknown == "location"){
@@ -813,15 +813,6 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
         matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
   }
   
-  # Calculation of lambda an k 
-  return (list("matX"=matX,
-               "matZ"=matZ,
-               "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
-               "k"=ksiX/ksiZ,
-               "mu_Z"=muZ,
-               "sig_Z"=sigZ,
-               "ksi_Z"=ksiZ))
-  # if ksiX==0
   if (ksiX==0){
     n <- length(sigZ)
     # We remind that if our shape inputs are just a value, the sample size will be 1
@@ -859,18 +850,45 @@ simulWclass_nonStationnary_general <-function(m,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
       }
     if (length(sigZ)!=n){
       stop("Z's parameters are not from the same length")
-      }
-    for(j in 1:N){
-      matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
-      for(i in 1:n){
-        matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
-}
-
-return (list("matX"=matX,
-             "matZ"=matZ,
-             "lam"=exp((muX-muZ)/sigX),
-             "k"=sigX/sigZ))
+    }
   }
+  
+  matX<-matrix(nrow=m,ncol=N)
+  matZ<-matrix(nrow=n,ncol=N)
+  
+  for(j in 1:N){
+    matX[,j] <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
+    for(i in 1:n){
+      matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
+    
+  }
+  
+  if (graph=="TRUE"){
+    
+    muZ_t <- c(muZ[1],muZ[n/4],muZ[n/2], muZ[3*n/4], muZ[n])
+    sigZ_t <- c(sigZ[1],sigZ[n/4],sigZ[n/2], sigZ[3*n/4],sigZ[n])
+    ksiZ_t <- c(ksiZ[1],ksiZ[n/4],ksiZ[n/2], ksiZ[3*n/4], ksiZ[n])
+    
+    plot(density(simul$matX),col="red")
+    
+    Z1 = rgev(size, loc = muZ_t[1], scale = sigZ_t[1], shape = ksiZ_t[1])
+    lines(density(Z1),col="gray")
+    Z2 = rgev(size, loc = muZ_t[2], scale = sigZ_t[2], shape = ksiZ_t[2])
+    lines(density(Z2),col="green")
+    Z3 = rgev(size, loc = muZ_t[3], scale = sigZ_t[3], shape = ksiZ_t[3])
+    lines(density(Z3),col="blue")
+    Z4 = rgev(size, loc = muZ_t[4], scale = sigZ_t[4], shape = ksiZ_t[4])
+    lines(density(Z4),col="purple")
+  }
+  
+  # Calculation of lambda an k
+  return (list("matX"=matX,
+               "matZ"=matZ,
+               "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
+               "k"=ksiX/ksiZ,
+               "mu_Z"=muZ,
+               "sig_Z"=sigZ,
+               "ksi_Z"=ksiZ))
   }
 
 ############################ Less general fonctions  ############################################
@@ -904,11 +922,16 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
          xlim=c(-4,12))
     lines(density(matZ[,1]),col="red")
   }
-  return(list("matX"=matX,
-              "matZ"=matZ,
-              "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
-              "k"=ksiX/ksiZ) 
-  )  
+  
+  # Calculation of lambda an k 
+  return (list("matX"=matX,
+               "matZ"=matZ,
+               "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
+               "k"=ksiX/ksiZ,
+               "mu_Z"=muZ,
+               "sig_Z"=sigZ,
+               "ksi_Z"=ksiZ))
+  
 }
 
 
