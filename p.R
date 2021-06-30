@@ -50,12 +50,12 @@ p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
 p1r_NonPar <- function(X,Z,r,tt,t_eval,h,kern= dEpan){
   # G_Z computation
   G_emp_carre <- ecdf(X)
-  G_Z_carre <- (G_emp_carre(Z))^(r-1)
+  G_Z_r <- (G_emp_carre(Z))^(r-1)
   # W computation
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
   # p12_hat computation
-  p13_hat <- W %*% G_Z_carre
+  p13_hat <- W %*% G_Z_r
 }
 
 ################################### Confidence interval ###########################################
@@ -79,17 +79,20 @@ kern_dens <- function(tt,t_eval,h,kern=dEpan) {
 
 #### Confidence interval computation
 IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
+  n <- length(Z)
   # computation of G_Z
   G_emp <- ecdf(X)
   G_Z <- G_emp(Z)
+  #Computation of p12_hat
+  p12_hat<-p12_NonPar(X,Z,tt,t_eval,h,kern)
   # integral of squared kernel
   K22<-integrate(dEpan_2,-1,1)$value
   # density distribution of t 
   f_t<-kern_dens(tt,tt,h)
   # variance of t 
-  sigma_t <- var(tt)
+  sigma_GZ <- as.numeric(var(G_Z-p12_hat))
   # Var(A):
-  VarA <- (sigma_t * K22 * f_t )^0.5
+  VarA <- (sigma_GZ * K22 * f_t )/(n*h)
   # Var(B):
   Khj <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   Khi <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
@@ -99,8 +102,6 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
   VarB <- VarB_num*E/VarB_denom
   # sigma = Var(A)+ Var(B)
   sigma_m <- VarA + VarB
-  #Computation of p12_hat
-  p12_hat<-p12_NonPar(X,Z,tt,t_eval,h,kern)
   # Computation of CI
   s <- (sigma_m)^1/2
   error <- qnorm(0.975)*s/sqrt(length(tt))
