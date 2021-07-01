@@ -52,9 +52,9 @@ p12_hat<-p12_NonPar(X,Z,tt,tt,0.11)
 ic<-IC(X,Z,tt,tt,0.11) 
 df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,heo=p12_theo)
 p12plot<-ggplot(df,aes(x=tt,y=p12_hat)) + geom_line(colour="red")  +
-  geom_line(aes(y=p12_theo), colour="black")+
-  geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) +
-  ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
+  geom_line(aes(y=p12_theo), colour="black")
+p12plot <- p12plot+geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) 
+p12plot <- p12plot +ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
 p12plot
 
 
@@ -90,11 +90,11 @@ p12plot
 
 # Error between p12_theo and p12_hat
 p12_error <- abs(p12_theo - p12_hat_moyen)
-plot(tt, p12_error, main="Error of estimation", ylab="error", xlab="temps")
+plot(tt, p12_error, main="Error of estimation", type="l",ylab="error", xlab="temps")
 
 # Incertitude of estimation
 ic_error <- ic_samples_high - ic_samples_low
-plot(tt, ic_error, main="Incertitude of estimation", ylab=" difference", xlab="temps")
+plot(tt, ic_error, main="Incertitude of estimation",type="l", ylab=" difference", xlab="temps")
 
 # max error evolution within N (Global error)
 Nn=50
@@ -415,6 +415,9 @@ err_p1r <- abs(p1rfar$p1r - p1r_t_theo); cat("error in p1r_t estimation: ", err_
 plot(tt,p1r_t_theo,type="l",col="red")
 lines(tt,p1rfar$p1r)
 
+p1r_hat_noyaux<-p1r_NonPar(X,Z,r,tt,tt,0.11,kern=dEpan)
+lines (tt, p1r_hat_noyaux, col="blue")
+
 ####  Multiple trajectories {(X)t,(Z)t} (N=1) ##################################################
 
 # Both Gumbel and Z with linear trend un muz
@@ -476,6 +479,7 @@ FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
   }
   return(list("matp1r"=p1rfar$p1r,"matfar"=p1rfar$far,"p1rmean"=p1r_mean))
 }
+
 
 ################################################################################################
 #### 5. Simulation of W-class trajectories with F = non-stationary                          ####
@@ -729,7 +733,7 @@ sig_x<-0.7
 mu_x<-0
 
 # Example 1
-simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=rep(0.25,n),sigZ=seq(1.0, 1.1, length.out = n),unknown="location")
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=rep(0.25,n),sigZ=seq(1.0, 1.1, length.out = n),unknown="location",graph=FALSE)
 # Example 2
 simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.25, 0.30, length.out = n),sigZ=seq(1.0, 1.1, length.out = n),unknown="location")
 # Example 3
@@ -739,13 +743,132 @@ simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=se
 # Exemple 5
 simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.20, 0.24, length.out = n),muZ=seq(1.0, 1.1, length.out = n),unknown="scale") 
 # Exemple 6
-simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.20, 0.23, length.out = n),muZ=rep(1.1,n),unknown="scale", graph="FALSE")
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,ksiZ=seq(0.20, 0.23, length.out = n),muZ=rep(1.1,n),unknown="scale")
 # Exemple 7
 simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,sigZ=seq(0.7, 1, length.out = n),muZ=rep(1.1,n),unknown="shape", graph="FALSE")
 # Example 8
 simul<-simulWclass_nonStationnary_general(m,N,ksiX=ksi_x,sigX=1,muX=mu_x,sigZ=seq(0.7, 1, length.out = n),muZ=seq(0, 3, length.out = n),unknown="shape", graph="FALSE")
 # Example 9
-simul<-simulWclass_nonStationnary_general(m,N,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n),sigZ=seq(1, 3, length.out = n),unknown="scale", graph="FALSE")
+simul<-simulWclass_nonStationnary_general(m,N,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n),sigZ=seq(1, 1.5, length.out = n), muZ=seq(0, 4, length.out = n),unknown="scale")
 # Example 10
 simul<-simulWclass_nonStationnary_general(m=200,N=1,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n),sigZ=rep(1,n),muZ=seq(0, 1, length.out = n), graph="FALSE")
+
+
+
+################################################################################################
+#### Trajectories compuatated from CMIP trajectory parameters                               ####
+################################################################################################
+
+##  TMAX #######################################################################################
+n <- 100
+m <- 100*2
+
+# point 1
+X <- rgev(m,loc=25.5,scale=0.12,shape=0.1)
+plot(density(X))
+Z <- rgev(n,loc=26.23,scale=0.11,shape=0.03)
+lines(density(Z))
+# point 70 
+X <- rgev(m,loc=25.72,scale=0.13,shape=0.13)
+plot(density(X))
+Z <- rgev(m,loc=26.04,scale=0.12,shape=0.06)
+lines(density(Z))
+# point 200
+X <- rgev(m,loc=25.27,scale=0.25,shape=0.16)
+plot(density(X))
+Z <- rgev(m,loc=25.67,scale=0.22,shape=0.25)
+lines(density(Z))
+# point 1000
+X <- rgev(m,loc=31.78,scale=0.11,shape=0.29)
+plot(density(X))
+Z <- rgev(m,loc=32.31,scale=0.11,shape=0.1)
+lines(density(Z))
+# point 2000
+X <- rgev(m,loc=30.20,scale=0.16,shape=0.16)
+plot(density(X))
+Z <- rgev(m,loc=30.92,scale=0.19,shape=0.46)
+lines(density(Z))
+
+##  prMAX #######################################################################################
+
+# point 1 
+X <- rgev(m,loc=4.45,scale= 1.42,shape= -0.04)
+plot(density(X))
+Z <- rgev(n,loc=5.76,scale=1.57,shape= - 0.01)
+lines(density(Z))
+# point 70
+X <- rgev(m,loc=2.24,scale=0.06,shape= -0.08)
+plot(density(X))
+Z <- rgev(m,loc=3.09,scale=0.88,shape=-0.07)
+lines(density(Z))
+# point 200 
+X <- rgev(m,loc=0.36,scale=0.08,shape=0.04)
+plot(density(X))
+Z <- rgev(m,loc=0.61,scale=0.15,shape=0.15)
+lines(density(Z))
+# point 1000 
+X <- rgev(m,loc= 10.11,scale= 5.09,shape= -0.03)
+plot(density(X))
+Z <- rgev(m,loc=6.13,scale=3.31,shape= -0.47)
+lines(density(Z))
+# point 2000
+X <- rgev(m,loc=9.05,scale=2.13,shape=0.07)
+plot(density(X))
+Z <- rgev(m,loc=9.07,scale=1.89,shape= -0.21) ## shape parameter of different sign
+lines(density(Z))
+
+#####  lambda_t  & k_t estimation ##############################################################
+
+n <- 100
+m <- 100*2
+
+#### Test 1:
+muX <- 30.20
+sigX <- 0.16
+ksiX <- 0.16
+
+muZ <- seq(30.20, 30.92, length.out = n)
+sigZ <- seq(0.16, 0.19, length.out = n)
+ksiZ <- seq(0.16, 0.46, length.out = n)
+
+#### Test 2:
+muX <- 25.5
+sigX <- 0.12
+ksiX <- 0.1
+
+muZ <- seq(25.5, 26.23, length.out = n)
+sigZ <- seq(0.12, 0.11, length.out = n)
+ksiZ <- seq(0.1, 0.03, length.out = n)
+
+##### Estimation 
+lambda_t_theo <- ((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX)
+k_t_theo <- ksiX/ksiZ
+
+matZ<-rep(0,n)
+matX <- rgev(m, loc=muX, scale= sigX, shape=ksiX)
+for(i in 1:n){
+  matZ[i] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
+
+plot(matZ,type="l")
+lines(matX,col="blue")
+
+GZ<-matGZ_func(matX,matZ)
+plot(GZ)
+
+tt <- seq.int(length(matZ))
+
+h1_seq<-seq(from=2, to=50,by=1)
+error_vector1<-CV_error(matX,matZ,tt,tt,h1_seq,kern= dEpan)
+h1_opt <- h1_seq[which(error_vector1 == min(error_vector1))]; h1_opt 
+
+param<-weibullGMM_NonStationaire(GZ, tt, tt, h1_opt, kern=dEpan, truevalues=NULL)
+param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
+
+plot(tt,k_t_theo,type="l", main=" k estimation")
+lines(tt,param$khat,col="blue")
+lines(tt,param2$khat,col="red")
+
+plot(tt,lambda_t_theo,type="l", main="lambda estimation")
+lines(tt,param$lambdahat,col="blue")
+lines(tt,param2$lambdahat,col="red")
 
