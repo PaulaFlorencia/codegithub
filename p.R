@@ -1057,33 +1057,71 @@ matcovNB_bij_t <- function(GmZ){
 }
 
 ##### varcovarNA_t #############################################################################
+
 matcovNA_t <- function(X.vec, Z.vec, GmZ,tt,t_eval,h){
   
   ## without G_hat 
   
-  ## Requires : kern_dens(), K22(), p12_NonPar(),  p13_NonPar()
+  ## Requires : kern_dens(), K22(), p13_NonPar(),  p1r_NonPar()
+  
+  J <- length(Z.vec)
   
   list_varcovarNA <- array(NA,c(2,2,J))
   
-  f_t<-kern_dens(tt,t_eval,h)
-  K22<-integrate(dEpan_2,-1,1)$value
-  
-  p12_hat<-p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
-  p13_hat<-p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
-  
-  Aij_t <- (K22/f_t)*as.numeric(var(GmZ-p12_hat))
-  Bij_t <- (K22/f_t)*as.numeric(var(GmZ^2-p13_hat))
-  
-  Cij_t <- as.numeric((GmZ-p12_hat)*(GmZ^2-p13_hat)) # aproxx
-
+  Aij <- matcovNA_aij_t(X.vec, Z.vec, GmZ,tt,t_eval,h)
+  Bij <- matcovNA_bij_t(X.vec, Z.vec, GmZ,tt,t_eval,h)
+  Cij <- matcovNA_cij_t(X.vec, Z.vec, GmZ,tt,t_eval,h)
   
   for (i in 1:J){
-    list_varcovarNA[1,1,i]<-Aij_t[i]
-    list_varcovarNA[1,2,i]<-Cij_t[i]
-    list_varcovarNA[2,1,i]<-Cij_t[i]
-    list_varcovarNA[2,2,i]<-Bij_t[i]
+    list_varcovarNA[1,1,i]<-Aij[i]
+    list_varcovarNA[1,2,i]<-Cij[i]
+    list_varcovarNA[2,1,i]<-Cij[i]
+    list_varcovarNA[2,2,i]<-Bij[i]
   }
   
   return (list_varcovarNA)
+}
+
+matcovNA_aij_t <- function(X.vec,Z.vec,tt,t_eval,h){
+  ## matcovNA[1,1]_t
+  J <- length(Z.vec)
+  p13_hat<-p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
+  K22<-integrate(dEpan_2,-1,1)$value
+  NA_aij_t <- (p13_hat*K22)/(h*J)
+  return (NA_aij_t)
+}
+
+matcovNA_bij_t <- function(X.vec,Z.vec,tt,t_eval,h){
+  ## matcovNA[2,2]_t
+  J <- length(Z.vec)
+  p15_hat<-p1r_NonPar(X.vec,Z.vec,5,tt,t_eval,h)
+  K22<-integrate(dEpan_2,-1,1)$value
+  NA_bij_t <- (p15_hat*K22)/(h*J)
+  return (NA_bij_t)
+}
+
+matcovNA_cij_t <- function(X.vec,Z.vec, GmZ, tt,t_eval,h){
+  ## matcovNA[1,2]_t & matcovNA[2,1]_t
+  J <- length(Z.vec)
+  p14_hat <- p1r_NonPar(X.vec,Z.vec,4,tt,t_eval,h)
+  K22 <- integrate(dEpan_2,-1,1)$value
+  Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
+  r12 <- (Kij %*% GmZ)/J
+  r13 <- (Kij %*% (GmZ^2))/J
+  NA_cij_t <- ((p15_hat*K22)/(h*J)) + r12*r13
+  return (NA_cij_t)
+}
+
+##### varcovarN_t #############################################################################
+
+matcovN_t <- function(X.vec, Z.vec, GmZ,tt,t_eval.vec,h){
+  J <- length(Z.vec)
+  list_matcovN <- array(NA,c(2,2,J))
+  list_matcovNA <- matcovNA_t(X.vec, Z.vec, GmZ,tt,t_eval,h)
+  list_matcovNB <- matcovNB_t(X.vec, Z.vec,GmZ,tt,t_eval,h)
+  for (i in 1:J){
+    list_matcovN[,,i]<- list_matcovNA[,,i] + list_matcovNB[,,i]
+  }
+  return (list_matcovN)
 }
 
