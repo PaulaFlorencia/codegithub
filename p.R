@@ -991,9 +991,23 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
 #### VarCovar matrix ###########################################################################
 matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   
-  ## computates varcovarp12p13_t = varcovarNA_t + varcovarNB_t
-  
+  ## This routine computes the variance-covariance matrix of 
+  ##
+  ##    N_n = sqrt(J*h)( (\hat{p}_12,\hat{p}_13) - (p_12,p_13) )
+  ##
+  ## Input :
+  ## - vectors of size I and J containing the trajectories X_t and Z_t
+  ## - vector tt of size J containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith h 
+  ##
+  ## Output :
+  ## - list of length J containg 2x2 asymptotic covariance matrices 
+  ##
+  ## Used in : ... 
+  ##
   ## Requires : matcovNA_t(), matcovNB_t()
+  
   J <- length(Z.vec)
   I <- length(X.vec)
   
@@ -1002,13 +1016,18 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   G_emp <- ecdf(X.vec)
   GmZ <- G_emp(Z.vec)
   
+  theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
+  lambda_t <- theta_t[[1]]
+  k_t <- theta_t[[2]]
+  
   p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
   p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
-  p14_hat.vec <- p1r_NonPar(X.vec,Z.vec,4,tt,t_eval,h)
-  p15_hat.vec <- p1r_NonPar(X.vec,Z.vec,5,tt,t_eval,h)
   
-  list_varcovarNA <- matcovNA_t(I,J,p13_hat.vec,p14_hat.vec,p15_hat.vec,tt,t_eval,h) 
-  list_varcovarNB <- matcovNB_t(I,J,p12_hat.vec, p13_hat.vec, GmZ,tt,t_eval,h)
+  p14.vec <-p1rfarW_temps(lambda_t,k_t,matrix(4,ncol=1,nrow=size))[[1]]
+  p15.vec <-p1rfarW_temps(lambda_t,k_t,matrix(5,ncol=1,nrow=size))[[1]]
+  
+  list_varcovarNA <- matcovNA_t(I,J,p13_hat.vec,p14.vec,p15.vec,tt,t_eval,h) 
+  list_varcovarNB <- matcovNB_t(I,J,p12_hat.vec, p13_hat.vec,lambda_t,k_t,tt,t_eval,h)
   
   for (i in 1:J){
     list_varcovarN[,,i]<- list_varcovarNB[,,i] + list_varcovarNA[,,i]
@@ -1018,15 +1037,11 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
 }
 
 ##### varcovarNB_t #############################################################################
-matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,GmZ,tt,t_eval,h){
+matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,lambda_t,k_t,tt,t_eval,h){
   
   ## fluctuations de G_hat autour de G
   
   ## Requires : matcovNB_aij_t(), matcovNB_bij_t(), matcovNB_cij_t()
-
-  theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
-  lambda_t <- theta_t[[1]]
-  k_t <- theta_t[[2]]
   
   Aij <- matcovNB_aij_t(p12_hat.vec,p13_hat.vec,lambda_t,k_t)
   Bij <- matcovNB_bij_t(p12_hat.vec,p13_hat.vec,lambda_t,k_t)
@@ -1037,13 +1052,21 @@ matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,GmZ,tt,t_eval,h){
   
   list_NB_t<- array(NA,c(2,2,J))
   
-  for (i in 1:dim(Kh)[1]){
-    Wij <- (h/(I*J)) * c(outer(Kh[i,], Kh[i,], "*")) 
-    
-    list_NB_t[1,1,i]<- sum(Wij*Aij) /denom[i]
-    list_NB_t[1,2,i]<- sum(Wij*Cij) /denom[i]
-    list_NB_t[2,1,i]<- sum(Wij*Cij) /denom[i]
-    list_NB_t[2,2,i]<- sum(Wij*Bij) /denom[i]
+  for (k in 1:dim(Kh)[1]){
+    #W <- c()
+    for (j in 1:dim(Kh)[2]){
+
+      for (i in 1:j){
+        
+        Wij <- (h/(I*J)) *c(Kh[k,j]*Kh[k,i])
+        
+        list_NB_t[1,1,k]<- sum(Wij*Aij) /denom[k]
+        list_NB_t[1,2,k]<- sum(Wij*Cij) /denom[k]
+        list_NB_t[2,1,k]<- sum(Wij*Cij) /denom[k]
+        list_NB_t[2,2,k]<- sum(Wij*Bij) /denom[k]
+        #W<-c(W,Wij)
+      }
+    }
   }
   return (list_NB_t) 
 }
@@ -1058,7 +1081,7 @@ matcovNB_aij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
     k.j <- k_t[j]
     p12_hat.j <- p12_hat_t[j]
     
-    for (i in 1:length(p12_hat_t)){
+    for (i in 1:j){
       lambda.i <- lambda_t[i]
       k.i <- k_t[i]
       p12_hat.i <- p12_hat_t[i]
@@ -1082,14 +1105,16 @@ matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
     p12_hat.j <- p12_hat_t[j]
     p13_hat.j <- p13_hat_t[j]
     
-    EGzjminGziGzj_partie1 <-partiedeEG1minG1G2func(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
-      
-    for (i in 1:length(p12_hat_t)){
+    EGzjminGziGzj_partieA1 <-partiedeEG1minG1G2func(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
+    
+    for (i in 1:j){
       lambda.i <- lambda_t[i]
       k.i <- k_t[i]
       p12_hat.i <- p12_hat_t[i]
       
-      EGzjminGziGzj <- EGzjminGziGzj_partie1 + (1/2) * p12_hat.j * p12_hat.i + p13_hat.j
+      EGzjminGziGzj_partieB <- calculEGzjminGziGzj_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
+      
+      EGzjminGziGzj <- EGzjminGziGzj_partieA1 + p13_hat.j + EGzjminGziGzj_partieB 
       NB_cij <- EGzjminGziGzj + (p13_hat.j * p12_hat.i)
     
       liste_matcovNB_ij_12 <- c(liste_matcovNB_ij_12, NB_cij)
@@ -1108,7 +1133,7 @@ matcovNB_bij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
     k.j <- k_t[j]
     p13_hat.j <- p13_hat_t[j]
     
-    for (i in 1:length(p12_hat_t)){
+    for (i in 1:j){
       lambda.i <- lambda_t[i]
       k.i <- k_t[i]
       p13_hat.i <- p13_hat_t[i]
@@ -1178,9 +1203,43 @@ foncpartiedeEG1minG1G2 <- function(x,lam,k,a){
   (1/a) * x^( 2/a - 1) * exp( -(2*lam/a^(1/k)) * (-log(x))^(1/k) )
 }
 
+
+funcEGzjminGziGzj_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
+  
+  nv=length(v)
+  mprime.j = lam.j / a.j^(1/k.j)
+  facteur1.j = exp( -mprime.j*(-log(v))^(1/k.j) ) 
+  facteur2.i=rep(0,nv)
+  for (i in 1:nv){
+    facteur2.i[i] = laplaceWeibull( j=1, lambda=lam.i, k=k.i, lowerbnd=(10^-6)*v[i],
+                                    upperbnd= v[i]^(1/a.i), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
+  }
+  facteur3.j=v^(1/a.j - 1)
+  return((1/a.j)*facteur1.j*facteur2.i*facteur3.j)
+}
+
+calculEGzjminGziGzj_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
+  
+  vala.j=fac*(lambda.j)^k.j
+  vala.i=fac*(lambda.i)^k.i
+  I <- integrate(f=funcEGzjminGziGzj_partieB,
+                 lower=lowerbnd,upper=1,
+                 subdivisions=1000L,
+                 rel.tol=10^(-5),
+                 lam.j=lambda.j,
+                 k.j=k.j,
+                 lam.i=lambda.i,
+                 k.i=k.i,
+                 a.j=vala.j,
+                 a.i=vala.i,
+                 lowerbnd=lowerbnd,
+                 stop.on.error = FALSE)
+  return(I$value)
+}
+
 ##### varcovarNA_t #############################################################################
 
-matcovNA_t <- function(I,J,p13_hat_t,p14_hat_t,p15_hat_t,tt,t_eval,h){
+matcovNA_t <- function(I,J,p13_hat_t,p14_t,p15_t,tt,t_eval,h){
   
   ## without G_hat 
   
@@ -1193,8 +1252,8 @@ matcovNA_t <- function(I,J,p13_hat_t,p14_hat_t,p15_hat_t,tt,t_eval,h){
   list_varcovarNA <- array(NA,c(2,2,J))
   
   Aij <- matcovNA_aij_t(J,f_t,K22,p13_hat_t,h) / f_t
-  Bij <- matcovNA_bij_t(J,f_t,K22,p15_hat_t,h) / f_t
-  Cij <- matcovNA_cij_t(J, f_t, K22, p14_hat_t,h) / f_t
+  Bij <- matcovNA_bij_t(J,f_t,K22,p15_t,h) / f_t
+  Cij <- matcovNA_cij_t(J, f_t, K22, p14_t,h) / f_t
   
   for (i in 1:J){
     list_varcovarNA[1,1,i]<-Aij[i]
@@ -1212,47 +1271,35 @@ matcovNA_aij_t <- function(J,f_t,K22,p13_hat_t,h){
   return (NA_aij_t)
 }
 
-matcovNA_bij_t <- function(J,f_t,K22,p15_hat_t,h){
+matcovNA_bij_t <- function(J,f_t,K22,p15_t,h){
   ## matcovNA[2,2]_t
-  NA_bij_t <- (p15_hat_t * K22 * f_t)/(h*J)
+  NA_bij_t <- (p15_t * K22 * f_t)/(h*J)
   return (NA_bij_t)
 }
 
-matcovNA_cij_t <- function(J, f_t, K22, p14_hat_t,h){
+matcovNA_cij_t <- function(J, f_t, K22, p14_t,h){
   ## matcovNA[1,2]_t & matcovNA[2,1]_t
   #Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   #r12 <- (Kij %*% GmZ)/J
   #r13 <- (Kij %*% (GmZ^2))/J
-  NA_cij_t <- ((p14_hat_t * K22 * f_t)/(h * J))
+  NA_cij_t <- ((p14_t * K22 * f_t)/(h * J))
   # + (r12 * r13)
   return (NA_cij_t)
 }
 
-##### varcovarN_t #############################################################################
-
-matcovN_t <- function(X.vec, Z.vec, GmZ,tt,t_eval.vec,h){
-  J <- length(Z.vec)
-  list_matcovN <- array(NA,c(2,2,J))
-  list_matcovNA <- matcovNA_t(X.vec, Z.vec, GmZ,tt,t_eval,h)
-  list_matcovNB <- matcovNB_t(X.vec, Z.vec,GmZ,tt,t_eval,h)
-  for (i in 1:J){
-    list_matcovN[,,i]<- list_matcovNA[,,i] + list_matcovNB[,,i]
-  }
-  return (list_matcovN)
-}
-
 ##### varcovarp_t #############################################################################
 
-matcovp_t <- function(matcovN.vec, X.vec, Z.vec, GmZ,tt,t_eval.vec,h){
-  J <- legth(Z.vec)
+matcovtheta_t <- function(matcovN.vec, X.vec, Z.vec, GmZ,tt,t_eval.vec,h){
+  J <- length(Z.vec)
   theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lam_t <- theta_t[[1]]
   k_t <- theta_t[[2]]
   Jacov <- jacobianFunctiong12(lam_t,k_t)
+  
   list_matcovp <- array(NA,c(2,2,J))
   
   for (i in 1:J){
-   # list_matcovp[,,i]<- inv( inv(jaconv[i]) %*% matcovN.vec[i] %*% jaconv[i] )
+    list_matcovp[,,i]<- inv(inv(Jacov[[1]][[i]]) %*% matcovN.vec[,,i] %*% t(Jacov[[1]][[i]]) )
   }
   return (list_matcovp)
 }
