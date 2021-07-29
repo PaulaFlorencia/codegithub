@@ -1002,11 +1002,13 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   G_emp <- ecdf(X.vec)
   GmZ <- G_emp(Z.vec)
   
+  p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
   p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
-  p12_hat.vec<-p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
+  p14_hat.vec <- p1r_NonPar(X.vec,Z.vec,4,tt,t_eval,h)
+  p15_hat.vec <- p1r_NonPar(X.vec,Z.vec,5,tt,t_eval,h)
   
-  list_varcovarNA <- matcovNA_t(X.vec, Z.vec, GmZ,tt,t_eval,h) ##
-  list_varcovarNB <- matcovNB_t(p12_hat.vec, p13_hat.vec, GmZ,tt,t_eval,h)
+  list_varcovarNA <- matcovNA_t(I,J,p13_hat.vec,p14_hat.vec,p15_hat.vec,tt,t_eval,h) 
+  list_varcovarNB <- matcovNB_t(I,J,p12_hat.vec, p13_hat.vec, GmZ,tt,t_eval,h)
   
   for (i in 1:J){
     list_varcovarN[,,i]<- list_varcovarNB[,,i] + list_varcovarNA[,,i]
@@ -1021,7 +1023,7 @@ matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,GmZ,tt,t_eval,h){
   ## fluctuations de G_hat autour de G
   
   ## Requires : matcovNB_aij_t(), matcovNB_bij_t(), matcovNB_cij_t()
-  
+
   theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lambda_t <- theta_t[[1]]
   k_t <- theta_t[[2]]
@@ -1163,9 +1165,7 @@ Mrfuncij <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10
 }
 
 partiedeEG1minG1G2func <- function(lambda,k,lowerbnd=10^(-6),fac=0.5){
-  # This function computes a part of E(G(Z1)*min(G(Z1),G(Z2))),
-  # an expression appearing inside the limit covariance matrix of (\hat{p}_12,\hat{p}_13).
-  # It is used inside function matcovNn().
+
   vala=fac*(2*lambda)^k
   I <- integrate(f=foncpartiedeEG1minG1G2,lower=lowerbnd,upper=1,subdivisions=1000L,
                  lam=lambda,k=k,a=vala,
@@ -1180,21 +1180,21 @@ foncpartiedeEG1minG1G2 <- function(x,lam,k,a){
 
 ##### varcovarNA_t #############################################################################
 
-matcovNA_t <- function(X.vec, Z.vec, GmZ,tt,t_eval,h){
+matcovNA_t <- function(I,J,p13_hat_t,p14_hat_t,p15_hat_t,tt,t_eval,h){
   
   ## without G_hat 
   
-  ## Requires : kern_dens(), K22(), p13_NonPar(),  p1r_NonPar()
-  
-  J <- length(Z.vec)
+  ## Requires : kern_dens(), K22()
   
   f_t<-kern_dens(tt,t_eval,h) 
   
+  K22 <- integrate(dEpan_2,-1,1)$value
+  
   list_varcovarNA <- array(NA,c(2,2,J))
   
-  Aij <- matcovNA_aij_t(X.vec, Z.vec, GmZ,tt,t_eval,h) / f_t
-  Bij <- matcovNA_bij_t(X.vec, Z.vec, GmZ,tt,t_eval,h) / f_t
-  Cij <- matcovNA_cij_t(X.vec, Z.vec, GmZ,tt,t_eval,h) / f_t
+  Aij <- matcovNA_aij_t(J,f_t,K22,p13_hat_t,h) / f_t
+  Bij <- matcovNA_bij_t(J,f_t,K22,p15_hat_t,h) / f_t
+  Cij <- matcovNA_cij_t(J, f_t, K22, p14_hat_t,h) / f_t
   
   for (i in 1:J){
     list_varcovarNA[1,1,i]<-Aij[i]
@@ -1206,36 +1206,25 @@ matcovNA_t <- function(X.vec, Z.vec, GmZ,tt,t_eval,h){
   return (list_varcovarNA)
 }
 
-matcovNA_aij_t <- function(X.vec,Z.vec,tt,t_eval,h){
+matcovNA_aij_t <- function(J,f_t,K22,p13_hat_t,h){
   ## matcovNA[1,1]_t
-  J <- length(Z.vec)
-  p13_hat<-p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
-  K22<-integrate(dEpan_2,-1,1)$value
-  f_t<-kern_dens(tt,t_eval,h) #
-  NA_aij_t <- (p13_hat * K22 * f_t)/(h*J)
+  NA_aij_t <- (p13_hat_t * K22 * f_t)/(h*J)
   return (NA_aij_t)
 }
 
-matcovNA_bij_t <- function(X.vec,Z.vec,tt,t_eval,h){
+matcovNA_bij_t <- function(J,f_t,K22,p15_hat_t,h){
   ## matcovNA[2,2]_t
-  J <- length(Z.vec)
-  p15_hat<-p1r_NonPar(X.vec,Z.vec,5,tt,t_eval,h)
-  K22<-integrate(dEpan_2,-1,1)$value
-  f_t<-kern_dens(tt,t_eval,h) #
-  NA_bij_t <- (p15_hat * K22 * f_t)/(h*J)
+  NA_bij_t <- (p15_hat_t * K22 * f_t)/(h*J)
   return (NA_bij_t)
 }
 
-matcovNA_cij_t <- function(X.vec,Z.vec, GmZ, tt,t_eval,h){
+matcovNA_cij_t <- function(J, f_t, K22, p14_hat_t,h){
   ## matcovNA[1,2]_t & matcovNA[2,1]_t
-  J <- length(Z.vec)
-  p14_hat <- p1r_NonPar(X.vec,Z.vec,4,tt,t_eval,h)
-  K22 <- integrate(dEpan_2,-1,1)$value
-  f_t<-kern_dens(tt,t_eval,h) 
-  Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
-  r12 <- (Kij %*% GmZ)/J
-  r13 <- (Kij %*% (GmZ^2))/J
-  NA_cij_t <- ((p15_hat * K22 * f_t)/(h * J)) + (r12 * r13)
+  #Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
+  #r12 <- (Kij %*% GmZ)/J
+  #r13 <- (Kij %*% (GmZ^2))/J
+  NA_cij_t <- ((p14_hat_t * K22 * f_t)/(h * J))
+  # + (r12 * r13)
   return (NA_cij_t)
 }
 
