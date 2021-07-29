@@ -1026,31 +1026,24 @@ matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,GmZ,tt,t_eval,h){
   lambda_t <- theta_t[[1]]
   k_t <- theta_t[[2]]
   
-  list_varcovarNB <- array(NA,c(2,2,J*J))
+  Aij <- matcovNB_aij_t(p12_hat.vec,p13_hat.vec,lambda_t,k_t)
+  Bij <- matcovNB_bij_t(p12_hat.vec,p13_hat.vec,lambda_t,k_t)
+  Cij <- matcovNB_cij_t(p12_hat.vec,p13_hat.vec,lambda_t,k_t)
   
-  Khj <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
-  W <- (h/(I*J))*(as.numeric(rowSums(Khj) %*% rowSums(Khj))/ (rowSums(Khj))^2)
+  Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
+  denom<-rowSums(Kh)^2
   
-  Aij <- W*matcovNB_aij_t(p12_hat_t,p13_hat_t,lambda_t,k_t)
-  Bij <- W*matcovNB_bij_t(p12_hat_t,p13_hat_t,lambda_t,k_t)
-  Cij <- W*matcovNB_cij_t(p12_hat_t,p13_hat_t,lambda_t,k_t)
+  list_NB_t<- array(NA,c(2,2,J))
   
-  for (i in 1:J){
-    list_varcovarNB[1,1,i]<-Aij[i]
-    list_varcovarNB[1,2,i]<-Cij[i]
-    list_varcovarNB[2,1,i]<-Cij[i]
-    list_varcovarNB[2,2,i]<-Bij[i]
+  for (i in 1:dim(Kh)[1]){
+    Wij <- (h/(I*J)) * c(outer(Kh[i,], Kh[i,], "*")) 
+    
+    list_NB_t[1,1,i]<- sum(Wij*Aij) /denom[i]
+    list_NB_t[1,2,i]<- sum(Wij*Cij) /denom[i]
+    list_NB_t[2,1,i]<- sum(Wij*Cij) /denom[i]
+    list_NB_t[2,2,i]<- sum(Wij*Bij) /denom[i]
   }
-  
-  # for (i in 1:(J*J)){
-  #   list_varcovarNB[1,1,i]<-mataijt[i]
-  #   list_varcovarNB[1,2,i]<-matcijt[i]
-  #   list_varcovarNB[2,1,i]<-matcijt[i]
-  #   list_varcovarNB[2,2,i]<-matbijt[i]
-  # }
-  
-  matcovNB_aij_t(X.vec,Z.vec,GmZ,tt,t_teval,h)
-  return (list_varcovarNB) 
+  return (list_NB_t) 
 }
 
 matcovNB_aij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
