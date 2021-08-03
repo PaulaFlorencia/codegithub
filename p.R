@@ -12,8 +12,8 @@ library(evd)
 
 ######  Kernels  ###############################################################################
 
-# Epanechnikov density distribution
 dEpan <- function(x){
+  ## Function of Epanechnikov density distribution
   k <- (3/4)* (1-x^2)
   k[-1>x] <- 0
   k[x>1] <- 0
@@ -24,38 +24,90 @@ dEpan <- function(x){
 Kern_gauss <- function(x)exp(-x^2/2)
 
 #### p12_t Non parametric computation ##############################################################
+
 p12_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
-  # G_Z computation
+  
+  ## Computation of p12_t using kernels   
+  ##
+  ##    \hat{p}12_t = Wtj %*% GmZ_tj 
+  ##
+  ## for each time step t 
+  ##
+  ## Input :
+  ## - Counterfactual an factual trajectories X_t and Z_t
+  ## - tt, vector tt of size J containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith h 
+  ##
+  ## Output :
+  ## - vector of length J containing \hat{p}12_t
+  ##
+  ## Used in : IC, CV_error, P12_P13_estimation , matcovp12p13_t
+  ##
+  ## Requires : dEpan (or Kern_gauss)
+  
   G_emp <- ecdf(X)
   G_Z <- G_emp(Z)
-  # W computation
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  # p12_hat computation
   p12_hat <- W %*% G_Z
 }
 
 #### p13_t and p1r_t Non parametric computation ##############################################################
 
 p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
-  # G_Z computation
+
+  ## Computation of p12_t using kernels   
+  ##
+  ##    \hat{p}12_t = Wtj %*% (GmZ_tj)^2 
+  ##
+  ## for each time step t 
+  ##
+  ## Input :
+  ## - Counterfactual an factual trajectories X_t and Z_t
+  ## - tt, vector tt of size J containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith h 
+  ##
+  ## Output :
+  ## - vector of length J containing \hat{p}1r_t
+  ##
+  ## Used in : P12_P13_estimation , matcovp12p13_t
+  ##
+  ## Requires : dEpan (or Kern_gauss)
+  
   G_emp_carre <- ecdf(X)
   G_Z_carre <- (G_emp_carre(Z))^2
-  # W computation
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  # p12_hat computation
   p13_hat <- W %*% G_Z_carre
 }
 
 p1r_NonPar <- function(X,Z,r,tt,t_eval,h,kern= dEpan){
-  # G_Z computation
+  
+  ## Computation of p12_t using kernels   
+  ##
+  ##    \hat{p}1r_t = Wtj %*% (GmZ_tj)^(r-1) 
+  ##
+  ## for each time step t 
+  ##
+  ## Input :
+  ## - Counterfactual an factual trajectories X_t and Z_t
+  ## - tt, vector tt of size J containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith h 
+  ##
+  ## Output :
+  ## - vector of length J containing \hat{p}1r_t
+  ##
+  ## Used in : Not used in other functions
+  ##
+  ## Requires : dEpan (or Kern_gauss)  
+
   G_emp_carre <- ecdf(X)
   G_Z_r <- (G_emp_carre(Z))^(r-1)
-  # W computation
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  # p12_hat computation
   p13_hat <- W %*% G_Z_r
 }
 
@@ -63,6 +115,7 @@ p1r_NonPar <- function(X,Z,r,tt,t_eval,h,kern= dEpan){
 
 #### Auxiliary fonctions 
 dEpan_2<- function(x){
+  ## Function of Epanechnikov squared density distribution
   k <- ((3/4)* (1-x^2))^2
   k[-1>x] <- 0
   k[x>1] <- 0
@@ -70,6 +123,7 @@ dEpan_2<- function(x){
 }
 
 kern_dens <- function(tt,t_eval,h,kern=dEpan) {
+  # f(t) density distibution
   fh <- numeric(length(t_eval))
   for (i in seq_along(tt))
     for (j in seq_along(t_eval))
@@ -80,30 +134,40 @@ kern_dens <- function(tt,t_eval,h,kern=dEpan) {
 
 #### p12_t's Confidence interval computation 
 IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
+  
+  ## Computation of p12_t's confidence interval   
+  ##
+  ## Input :
+  ## - Counterfactual an factual vectors X and Z
+  ## - tt, vector tt of length(Z) containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith value h 
+  ##
+  ## Output :
+  ## - two lists containining upper and lower bonds of the estimator 
+  ##
+  ## Used in : Not used in other functions
+  ##
+  ## Requires : p12_NonPar, dEpan_2, dEpan,  
+  
   n <- length(Z)
-  # computation of G_Z
   G_emp <- ecdf(X)
   G_Z <- G_emp(Z)
-  #Computation of p12_hat
+  
   p12_hat<-p12_NonPar(X,Z,tt,t_eval,h,kern)
-  # integral of squared kernel
   K22<-integrate(dEpan_2,-1,1)$value
-  # density distribution of t 
   f_t<-kern_dens(tt,tt,h)
-  # variance of t 
   sigma_GZ <- as.numeric(var(G_Z-p12_hat))
-  # Var(A):
   VarA <- (sigma_GZ * K22 * f_t )/(n*h)
-  # Var(B):
+  
   Khj <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   Khi <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   E <- mean(outer(G_Z,G_Z, pmin) - outer(G_Z,G_Z,"*"))
   VarB_num <- as.numeric(rowSums(Khj) %*% rowSums(Khi))
   VarB_denom <- length(tt)*(rowSums(Khj))^2
   VarB <- VarB_num*E/VarB_denom
-  # sigma = Var(A)+ Var(B)
+  
   sigma_m <- VarA + VarB
-  # Computation of CI
   s <- (sigma_m)^1/2
   error <- qnorm(0.975)*s/sqrt(length(tt))
   left <- p12_hat-error
@@ -117,6 +181,26 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
 
 # as imput we have a sequence of h and as output d'error associated with each one
 CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
+  
+  ## This routine uses cross validation to chose the optimal bandwith of the kernel   
+  ## from a set of values.
+  ##
+  ## Input :
+  ## - Counterfactual an factual vectors X and Z
+  ## - tt, vector tt of length(Z) containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - h_seq, vector containing the set from which the optimal bandwith will be chosen 
+  ## - kernel bandwith value h 
+  ##
+  ## Output : list of 3 elements
+  ## - optimal bandwith
+  ## - optimal error
+  ## - vector of errors
+  ##
+  ## Used in : Not used in other functions yet 
+  ##
+  ## Requires : p12_Nonpar  
+  
   n <- length(tt)
   G_emp <- ecdf(X)
   G_Z <- G_emp(Z)
@@ -132,13 +216,32 @@ CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
     }
     CV_err_h[j]<-(mean(CV_err))^0.5
   }
-  return(CV_err_h) #vector of errors
+  h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]
+  opt_err <-min(CV_err_h)
+  return(list("optimal_bandwith"= h_opt,"optimal_error"= opt_err ,"list_errors"= CV_err_h) )#vector of errors
 }
+
 
 #### General fonction #############################################################################
 
 # Estimate p12_t and p13_t for each trajectory {(X)_t,(Z)_t}
 P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
+  
+  ## This routine computes both \hat{p}12_t and  \hat{p}13_t 
+  ##
+  ## Input :
+  ## - Counterfactual an factual matrix  matX and matZ , where each column is a trayectory Xi or Zi
+  ## - tt, vector tt of length(Z) containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith value h 
+  ##
+  ## Output : list of 2 elements
+  ## - matrix matp12 of \hat{p}12_t , where the column i is associated to {Xi,Zi}
+  ## - same for matrix matp13 
+  ##
+  ## Used in : FastTestforp1r_gumbel 
+  ##
+  ## Requires : p12_Nonpar, p13_NonPar 
   
   matX <- as.matrix(matX)
   matZ <- as.matrix(matZ) 
@@ -167,12 +270,33 @@ P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
 library(stats4); library(gmm); library(stats); library(np); library(EWGoF)
 
 #### functions for E(G(Z)^j)
-
 funcLaplace <- function(x,m,lam,k,a){ 
+  ##  Utilitary function used in the integrate() statement in function 
+  ## laplaceWeibull() defined below
   (1/a) * exp( -(m*lam/a^(1/k))*(-log(x))^(1/k) ) * x^(1/a - 1) 
 }
 
 laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(-5)){
+  
+  ## This function computes E(G(Z)^j) 
+  ## for any given integer j, where W is a Weibull(lambda,k) variable.
+  ## 
+  ## The computation is based on integration rather than partial power series, 
+  ##
+  ## Input :
+  ## - single values of lambda and k (in practice issued from weibullGMM_NonStationaire
+  ##   or other estimation method) 
+  ## - j value , in practice j = r-1
+  ## - other optional parameters controll the way the numerical integration is conducted 
+  ##
+  ##
+  ## Output :
+  ## - the numerical evaluation of E(exp(-j*W)) when W~Weibull(lambda,k)
+  ##
+  ## Used in function : many functions in this file
+  ## Requires : funcLaplace()
+  ## 
+
   cat("lam=",lambda,",k=",k,"\n")
   vala=fac*(j*lambda)^k  
   upperbndmodif=upperbnd^vala   
@@ -190,6 +314,24 @@ laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(
 
 #### Jacobian computation
 jacobianFunctiong12 <- function(lam.vec,k.vec,debugg=FALSE){
+  
+  ## This function computes the J (2x2) jacobian matrices of function
+  ## g : (lambda_tj,k_tj) -> 
+  ##     ( g1(lambda_tj,k_tj), g2(lambda,k) ) = ( E(G(Z_tj)) , E(G^2(Z_tj)) )
+  ##
+  ## at the values (lambda_t,k_t) given as inputs.
+  ##
+  ## Input :
+  ## - vectors of same sizes containing values of lambda and k
+  ##   (in practice, these values are estimates of lambda and k issued from weibullGMMestim())
+  ##
+  ## Output :
+  ## - a list containing the J 2x2 jacobian matrices described above 
+  ##
+  ## Used : weibullFsolve() (as J12), matcovtheta_t(), varp1rfar_t()
+  ##
+  ## Requires : dgjoverdlambdafunc(), dgjoverdkfunc()
+  
   lvec <- length(lam.vec)
   listejacobiennes <- list()
   for (i in 1:lvec){
@@ -209,10 +351,19 @@ jacobianFunctiong12 <- function(lam.vec,k.vec,debugg=FALSE){
 }
 
 foncdgjoverdlambda <- function(u,j,lam,k,a){
+  ## Utilitary function used inside dgjoverdlambdafunc() 
   (-j/a^((1/k)+1)) * (-log(u))^(1/k) * exp( -(j*lam/a^(1/k))*(-log(u))^(1/k) ) * u^(1/a - 1) 
 }
 
 dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=0.5){
+  
+  ## This utilitary function computes the partial derivative lambda
+  ## of the expectation E( exp(-j*W) ) where W is Weibull(lambda,k).
+  ##
+  ## Used in : jacobianFunctiong12(), jacobianFunctiongrminus1()
+  ##
+  ## Requires : foncdgjoverdlambda()
+  
   vala=fac*(j*lambda)^k
   I <- integrate(f=foncdgjoverdlambda,lower=lowerbnd,upper=1,subdivisions=1000L,
                  j=j,lam=lambda,k=k,a=vala,
@@ -221,10 +372,19 @@ dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=0.5){
 }
 
 foncdgjoverdk <- function(u,j,lam,k,a){
+  ## Utilitary function used inside dgjoverdkfunc() 
   (-lam/k^2) * log( (1/a)*(-log(u)) ) * foncdgjoverdlambda(u,j,lam,k,a)
 }
 
 dgjoverdkfunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=1){
+  
+  ## This utilitary function computes the partial derivative k
+  ## of the expectation E( exp(-j*W) ) where W is Weibull(lambda,k).
+  ##
+  ## Used in : jacobianFunctiong12(), jacobianFunctiongrminus1()
+  ##
+  ## Requires : foncdgjoverdk()
+  
   vala=fac*(j*lambda)^k
   I <- integrate(f=foncdgjoverdk,lower=lowerbnd,upper=1,subdivisions=1000L,
                  j=j,lam=lambda,k=k,a=vala,stop.on.error = FALSE)
@@ -235,6 +395,23 @@ dgjoverdkfunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=1){
 ############################ fsolve method #####################################################
 
 functionp12p13 <- function(theta,vecx){
+  
+  ## This routine computes both \hat{p}12_t and  \hat{p}13_t 
+  ##
+  ## Input :
+  ## - Counterfactual an factual matrix  matX and matZ , where each column is a trayectory Xi or Zi
+  ## - tt, vector tt of length(Z) containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith value h 
+  ##
+  ## Output : list of 2 elements
+  ## - matrix matp12 of \hat{p}12_t , where the column i is associated to {Xi,Zi}
+  ## - same for matrix matp13 
+  ##
+  ## Used in : FastTestforp1r_gumbel 
+  ##
+  ## Requires : p12_Nonpar, p13_NonPar
+  
   lambdaval=theta[1] ; kval = theta[2]
   p12 = vecx[1] ; p13 = vecx[2]
   p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
@@ -243,11 +420,40 @@ functionp12p13 <- function(theta,vecx){
   return(M)
 }
 
-fg <- function(theta){functionp12p13(theta,vecx=phat)}
+fg <- function(theta){
+  ## Utilitary function used inside weibullFsolve()
+  ## it allows us to use functionp12p13() just giving it theta as input 
+  functionp12p13(theta,vecx=phat)}
 
-J12 <- function(x){jacobianFunctiong12(x[1],x[2])}
+
+J12 <- function(x){
+  ## Utilitary function used inside weibullFsolve()
+  ## it allows us to use functionp12p13() just giving a vector as imput 
+  jacobianFunctiong12(x[1],x[2])}
 
 weibullFsolve <- function(matp12,matp13,truevalues=NULL){
+  
+  ## This function computes the estimates of lambda_t and k_t 
+  ## from the output of the the estimations \hat{p}12, \hat{p}13
+  ## solving the equation system with Newton-Raphson method
+  ##
+  ## Input :
+  ## - matrix matp12 and matp13, contaning \hat{p}12 and  \hat{p}13 estimations
+  ##   where each column is associated with trayectory Xi or Zi.
+  ## - truevalues : an optional matrix, which can contain appropriate 
+  ##   starting values for the estimation process. 
+  ##   For instance, in a simulation setting, this optional matrix could
+  ##   contain the true underlying values of the Weibull parameters lambda and k. 
+  ##   (this matrix should contain the lambda values in the first row, and 
+  ##    the k values in the second row ; the number of columns must be same as that of matGm)
+  ##
+  ## Output :
+  ## - a list of 2 elements, the first one ($lambdahat) containing the estimate
+  ##   of the scale lambda parameter for each column of matp12 and matp13 (ie of matX and matZ),  
+  ##   and the second one ($khat) containing the estimate of the shape k shape parameter.
+  ##
+  ## Requires : the fsolve() routine and the utilitary function functionp12p13() 
+
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
   Nligne <- dim(matp12)[1]
@@ -298,13 +504,13 @@ weibullFsolve <- function(matp12,matp13,truevalues=NULL){
 ################################################################################################
 ############################ fsolve  modified method ###########################################
 
-## fsolve_modif() is a modification of fsolev(), where we impose:
-# [lambda,k]_xnew <- ([lambda,k]_x0)/2 when lamba<0
-## We do not use the jacobian matrix
-
 fsolve_modif <- function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.eps^(0.5), 
           ...) 
 {
+  ## Utilitary function used inside weibullFsolve_modif()
+  ## It is a modified version of the fuction fsolve() that uses broyden_modif()
+  ## as numerical method, instead of broyden()
+  
   if (!is.numeric(x0)) 
     stop("Argument 'x0' must be a numeric vector.")
   x0 <- c(x0)
@@ -340,6 +546,14 @@ fsolve_modif <- function (f, x0, J = NULL, maxiter = 100, tol = .Machine$double.
 
 broyden_modif<-function (Ffun, x0,J0 = NULL, ..., maxiter = 100, tol = .Machine$double.eps^(1/2)) 
 {
+  ## Numerical method used in fsolve_modif()
+  ## It is a modified version of the fuction broyden() in wich we constrait the parameters
+  ## lambda and k from taking negativ values. 
+  ## the constraints added are: 
+  ## lambda_xnew <- (lambda_x0)/2 when lamba_xnew<0 & k_xnew <- (k_x0)/2 when k_xnew<0
+  ##
+  ## The paramatric jacobian matrix is not used, instead a numerical one is estimated
+
   if (!is.numeric(x0)) 
     stop("Argument 'x0' must be a numeric (row or column) vector.")
   fun <- match.fun(Ffun)
@@ -394,6 +608,29 @@ broyden_modif<-function (Ffun, x0,J0 = NULL, ..., maxiter = 100, tol = .Machine$
 }
 
 weibullFsolve_modif <- function(matp12,matp13,truevalues=NULL){
+  
+  ## Similar to weibullFsolve(). This function computes the estimates of
+  ## lambda_t and k_t from the output of the the estimations \hat{p}12, \hat{p}13
+  ## solving the equation system with a modified Newton-Raphson method
+  ## that prevents lambda and k from taking negative values
+  ##
+  ## Input :
+  ## - matrix matp12 and matp13, contaning \hat{p}12 and  \hat{p}13 estimations
+  ##   where each column is associated with trayectory Xi or Zi.
+  ## - truevalues : an optional matrix, which can contain appropriate 
+  ##   starting values for the estimation process. 
+  ##   For instance, in a simulation setting, this optional matrix could
+  ##   contain the true underlying values of the Weibull parameters lambda and k. 
+  ##   (this matrix should contain the lambda values in the first row, and 
+  ##    the k values in the second row ; the number of columns must be same as that of matGm)
+  ##
+  ## Output :
+  ## - a list of 2 elements, the first one ($lambdahat) containing the estimate
+  ##   of the scale lambda parameter for each column of matp12 and matp13 (ie of matX and matZ),  
+  ##   and the second one ($khat) containing the estimate of the shape k shape parameter.
+  ##
+  ## Requires : the fsolve_modif() routine and the utilitary function functionp12p13() 
+  
   matp12 <- as.matrix(matp12)
   matp13 <- as.matrix(matp13)
   Nligne <- dim(matp12)[1]
@@ -1004,7 +1241,7 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   ## - kernel bandwith h 
   ##
   ## Output :
-  ## - list of length J containg 2x2 asymptotic covariance matrices 
+  ## - Array of length J containg 2x2 asymptotic covariance matrices 
   ##
   ## Used in : ... nowhere yet
   ##
@@ -1050,13 +1287,13 @@ matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,lambda_t,k_t,tt,t_eval,h){
   ## Input :
   ## - vectors of size I and J containing the trajectories X_t and Z_t
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
-  ## - two vectors of length t with Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
+  ## - two vectors of length J with Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ## - vector tt of size J containing the Z's time steps
   ## - evaluation vector t_eval (in practice t_eval = tt)
   ## - kernel bandwith h 
   ##
   ## Output :
-  ## - list of length J containg 2x2 asymptotic covariance matrices of NB_n
+  ## - Array of length J containg 2x2 asymptotic covariance matrices of NB_n
   ##
   ## Used in : matcovp12p13_t
   ##
@@ -1071,7 +1308,7 @@ matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,lambda_t,k_t,tt,t_eval,h){
   list_NB_t<- array(NA,c(2,2,J))
   
   for (k in 1:dim(Kh)[1]){
-    #W <- c()
+    
     denom<-(sum(Kh[k,]))^2
     list_Wij <- c()
     
@@ -1085,7 +1322,6 @@ matcovNB_t <- function(I,J,p12_hat_t, p13_hat_t,lambda_t,k_t,tt,t_eval,h){
         
         list_Wij <- c(list_Wij, KhjKhi)
                         
-        #W<-c(W,Wij)
       }
     }
     
@@ -1102,14 +1338,14 @@ matcovNB_aij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
   
   ## This fucntion computes the unweighted term Aij of NB_n's asymptotic variance-covariance matrix
   ##
-  ## Aij = E( min( G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) )
+  ##    Aij = E( min( G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
   ## Output :
-  ## - Vector of length (J^2)/4 - J containing Aij terms
+  ## - Vector containing Aij terms
   ##
   ## Used in : matcovNB_t
   ##
@@ -1139,14 +1375,14 @@ matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
-  ##    Cij = E( ( G(Z_tj) *min( G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) )
+  ##    Cij = E( ( G(Z_tj) *min(G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
   ## Output :
-  ## - Vector of length (J^2)/4 - J containing Cij terms
+  ## - Vector containing Cij terms
   ##
   ## Used in : matcovNB_t
   ##
@@ -1170,7 +1406,7 @@ matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       EGzjminGziGzj_partieB <- calculEGzjminGziGzj_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
       
       EGzjminGziGzj <- EGzjminGziGzj_partieA1 + p13_hat.j + EGzjminGziGzj_partieB 
-      NB_cij <- EGzjminGziGzj + (p13_hat.j * p12_hat.i)
+      NB_cij <- 2*(EGzjminGziGzj + (p13_hat.j * p12_hat.i))
     
       liste_matcovNB_ij_12 <- c(liste_matcovNB_ij_12, NB_cij)
     }
@@ -1179,8 +1415,7 @@ matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 }
 
 matcovNB_bij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
-  ## list of matcovNB_ij[2,2]
-  
+
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
   ##    Bij = E( ( G(Z_tj)*G(Z_ti) *min( G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) )
@@ -1190,7 +1425,7 @@ matcovNB_bij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
   ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
   ## Output :
-  ## - Vector of length (J^2)/4 - J containing Cij terms
+  ## - Vector containing Cij terms
   ##
   ## Used in : matcovNB_t
   ##
@@ -1208,7 +1443,7 @@ matcovNB_bij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       k.i <- k_t[i]
       p13_hat.i <- p13_hat_t[i]
       
-      NB_bij <-Mrfuncij(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i
+      NB_bij <- 4*(Mrfuncij(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
       
       liste_matcovNB_ij_22 <- c(liste_matcovNB_ij_22, NB_bij)
     }
@@ -1243,7 +1478,7 @@ Mrfuncij <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10
   
   ## This function computes the value 
   ##   
-  ##    M_r = E( G(Z_tj)^(r-2)*G(Z_tj)^(r-2) * min(G(Z_tj),G(Z_ti)) )
+  ##    M_rij = E( G(Z_tj)^(r-2)*G(Z_tj)^(r-2) * min(G(Z_tj),G(Z_ti)) )
   ##
   ## which is part of Aij and Bij, component of the asymptotic variance- covariance matrix of NB_n
   ## 
@@ -1273,6 +1508,7 @@ Mrfuncij <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10
 
 
 funcEGzjminGziGzj_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
+  
   ## Utilitary function used inside function calculEGzjminGziGzj_partieB()
   ##
   ## Requires : laplaceWeibull()
@@ -1290,6 +1526,7 @@ funcEGzjminGziGzj_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^
 }
 
 calculEGzjminGziGzj_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
+  
   ## This function computes a part of the term Cij
   ##
   ## Input :
@@ -1316,7 +1553,8 @@ calculEGzjminGziGzj_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-
 }
 
 calculEGzjminGziGzj_partieA <- function(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5){
-  # This function computes a part of the term Cij
+  
+  ## This function computes a part of the term Cij
   ##
   ## Input :
   ## - Lambda_tj and K_tj
@@ -1383,6 +1621,7 @@ matcovNA_t <- function(I,J,p13_hat_t,p14_t,p15_t,tt,t_eval,h,kern=dEpan){
 }
 
 matcovNA_Var_r12_t <- function(J,f_t,K22,p13_hat_t,h){
+  
   ## This fucntion computes the unweighted term Var[\tilde{r}_12.t]] of NA_n's asymptotic variance-covariance matrix
   ##
   ##   sqr(J*h) * ( (1/(J*h)) * p_13.t * f(t) * K22 )
@@ -1404,6 +1643,7 @@ matcovNA_Var_r12_t <- function(J,f_t,K22,p13_hat_t,h){
 }
 
 matcovNA_Var_r13_t <- function(J,f_t,K22,p15_t,h){
+  
   ## matcovNA[2,2]_t
   ## This fucntion computes the unweighted term Var[\tilde{r}_12.t]] of NA_n's asymptotic variance-covariance matrix
   ##
@@ -1420,11 +1660,13 @@ matcovNA_Var_r13_t <- function(J,f_t,K22,p15_t,h){
   ## - Vector of length J containing [2,2] NA_n's asymptotic variance-covariance matrix terms
   ##
   ## Used in : matcovNA_t
+  
   NA_bij_t <- (p15_t * K22 * f_t)/sqrt(h*J)
   return (NA_bij_t)
 }
 
 matcovNA_Covar_r12r13_t <- function(J, f_t, K22, p14_t,h){
+  
   ## This fucntion computes the unweighted term Var[\tilde{r}_12.t]] of NA_n's asymptotic variance-covariance matrix
   ##
   ##   sqr(J*h) * ( (1/J) * p_14.t * f(t) * K22 )
@@ -1440,6 +1682,7 @@ matcovNA_Covar_r12r13_t <- function(J, f_t, K22, p14_t,h){
   ## - Vector of length J containing [1,2] and [2,1] NA_n's asymptotic variance-covariance matrix terms
   ##
   ## Used in : matcovNA_t
+  
   NA_cij_t <- ((p14_t * K22 * f_t)/(h * J))
   return (NA_cij_t)
 }
@@ -1528,5 +1771,7 @@ CI_p1rfar <- function(r, lambda_t, k_t, matcovN.vec, X.vec, Z.vec, GmZ,tt,t_eval
   
   return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"lowfar_t"=lowerbndfar_t,"upper" ))
 }
+
+
 
   
