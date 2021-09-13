@@ -1417,6 +1417,25 @@ plotd_time <- function(size,mux,muz,sigx,sigz){
 
 matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   
+  ## This routine computes the variance-covariance matrix of  
+  ##
+  ##    N = ( (\hat{p}_12.t,\hat{p}_13.t) - (p_12.t,p_13.t) )
+  ##
+  ## for each time step t 
+  ##
+  ## Input :
+  ## - vectors of size I and J containing the trajectories X and Z
+  ## - vector tt of size J containing the Z's time steps
+  ## - evaluation vector t_eval (in practice t_eval = tt)
+  ## - kernel bandwith h 
+  ##
+  ## Output :
+  ## - Array of length J containg 2x2 asymptotic covariance matrices 
+  ##
+  ## Used in : ... nowhere yet
+  ##
+  ## Requires : matcovNA_t(), matcovNB_t()
+  
   J <- length(Z.vec)
   I <- length(X.vec)
   
@@ -1430,9 +1449,9 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
   p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
   
-  list_varcov_N_t<- array(NA,c(2,2,J))
+  list_unweighed_matcov_N_t<- array(NA,c(2,2,J))
   
-  list_unweighed_varcovarNB <- matcovNB_t(p12_hat.vec, p13_hat.vec,lambda_t,k_t,J)
+  list_unweighed_matcov_NB <- matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t,J)
   
   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   
@@ -1440,12 +1459,12 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
     
     list_unweighed_matcov_NA_t<-matcov_NA_t(index_t, p12_hat.vec, p13_hat.vec,J)
     
-    list_unweighed_varcovar_N[,,i]<- list_unweighed_varcovarNB[,,i] + list_unweighed_matcov_NA_t[,,i]
+    list_unweighed_matcov_N_t[,,index_t]<- list_unweighed_matcov_NB[,,index_t] + list_unweighed_matcov_NA_t[,,index_t]
     
-    Aji <- list_unweighed_varcovar_N[1,1,]
-    Bji <- list_unweighed_varcovar_N[2,2,]
-    Cji <- list_unweighed_varcovar_N[1,2,]
-    Cij <- list_unweighed_varcovar_N[2,1,]
+    Aji <- list_unweighed_matcov_N_t[1,1,]
+    Bji <- list_unweighed_matcov_N_t[2,2,]
+    Dji <- list_unweighed_matcov_N_t[1,2,]
+    Cij <- list_unweighed_matcov_N_t[2,1,]
     
     denom<-(sum(Kh[index_t,]))^2
     
@@ -1462,72 +1481,68 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
         list_Wji_t <- c(list_Wji_t, KhjKhi)
       }
     }
-    list_weighed_varcov_N_t[1,1,index_t] <- sum(list_Wij_t * Aji) / denom
-    list_weighed_varcov_N_t[1,2,index_t] <- sum(list_Wij_t * Cji) /denom
-    list_weighed_varcov_N_t[2,1,index_t] <- sum(list_Wij_t * Cij) /denom
-    list_weighed_varcov_N_t[2,2,index_t] <- sum(list_Wij_t * Bji) /denom
+    list_weighed_matcov_N_t[1,1,index_t] <- sum(list_Wij_t * Aji) / denom
+    list_weighed_matcov_N_t[1,2,index_t] <- sum(list_Wij_t * Dji) /denom
+    list_weighed_matcov_N_t[2,1,index_t] <- sum(list_Wij_t * Cij) /denom
+    list_weighed_matcov_N_t[2,2,index_t] <- sum(list_Wij_t * Bji) /denom
   }
   return(list_weighed_varcov_N_t)
 }
 
-##### varcovarNB_t #############################################################################
+##### varcovarNB #############################################################################
 
-matcovNB_t <- function(p12_hat_t, p13_hat_t,lambda_t,k_t,J){
+matcovNB <- function(p12_hat_t, p13_hat_t,lambda_t,k_t,J){
   
   ## This routine computes the unweighed variance-covariance matrix of NA
   ##
-  ##    NA_unweighed (t) =  ( A1_jit & C1ijt / C1jit & B1jit )
+  ##    matcov_NB_unweighed (t) =  ( A1_jit & C1_ijt \\ C1_jit & B1_jit )
   ##
   ## for each time step t 
   ##
   ## Input :
-  ## - vectors of size I and J containing the trajectories X_t and Z_t
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ## - two vectors of length J with Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
-  ## - vector tt of size J containing the Z's time steps
-  ## - evaluation vector t_eval (in practice t_eval = tt)
-  ## - kernel bandwith h 
+  ## - J: length of trajectory Z
   ##
   ## Output :
-  ## - Array of length J containg 2x2 asymptotic covariance matrices of NB_n
+  ## - Array of length J containg 2x2 unweighed covariance matrice of NB 
   ##
   ## Used in : matcovp12p13_t
   ##
-  ## Requires : matcovNB_aij_t(), matcovNB_bij_t(), matcovNB_cij_t()
+  ## Requires : matcovNB_aij_t(), matcovNB_bji(), matcovNB_cji()
   
-  A1_ji <- matcovNB_aij_t(p12_hat_t,p13_hat_t,lambda_t,k_t)
-  B1_ji <- matcovNB_bij_t(p12_hat_t,p13_hat_t,lambda_t,k_t)
-  C1_ji <- matcovNB_cij_t(p12_hat_t,p13_hat_t,lambda_t,k_t)
+  A1_ji <- matcovNB_aji(p12_hat_t,p13_hat_t,lambda_t,k_t)
+  B1_ji <- matcovNB_bji(p12_hat_t,p13_hat_t,lambda_t,k_t)
+  C1_ji <- matcovNB_cji(p12_hat_t,p13_hat_t,lambda_t,k_t)
   
-  list_unweighed_NB <- array(NA,c(2,2,J))
+  list_unweighed_matcov_NB <- array(NA,c(2,2,J))
   
-  list_unweighed_NB[1,1,] <- A1_ji
-  list_unweighed_NB[1,2,] <- C1_ji 
-  list_unweighed_NB[2,1,] <- C1_ji 
-  list_unweighed_NB[2,2,] <- B1_ji 
+  list_unweighed_matcov_NB[1,1,] <- A1_ji
+  list_unweighed_matcov_NB[1,2,] <- C1_ji 
+  list_unweighed_matcov_NB[2,1,] <- C1_ij 
+  list_unweighed_matcov_NB[2,2,] <- B1_ji 
   
-}
-return (list_unweighed_NB) 
-}
+  return (list_unweighed_matcov_NB) 
+  }
 
-matcovNB_aij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
+matcovNB_aji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
   
   ## This fucntion computes the unweighted term Aij of NB_n's asymptotic variance-covariance matrix
   ##
-  ##    Aij = E( min( G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) ) =  E ( M_2ji + ( p12_hat.j * p12_hat.i ) )
+  ##    Aij = E( min ( G(Z_tj),G(Z_ti) ) - G(Z_tj )* G(Z_ti) ) =  E ( M_2ji + ( p12_hat.j * p12_hat.i ) )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
-  ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
+  ## - two vectors of length J containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
   ## Output :
-  ## - Vector containing Aij terms
+  ## - Vector containing A1_ji terms
   ##
-  ## Used in : matcovNB_t
+  ## Used in : matcovNB
   ##
-  ## Requires : Mrfuncij()
+  ## Requires : Mrfuncji()
   
-  liste_matcovNB_ji_11 <- c()
+  list_unweighed_matcov_NB_aji <- c()
   
   for (j in 1:length(p12_hat_t)){
     lambda.j <- lambda_t[j]
@@ -1539,32 +1554,32 @@ matcovNB_aij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       k.i <- k_t[i]
       p12_hat.i <- p12_hat_t[i]
       
-      NB_aij <-Mrfuncij(2,lambda.j,k.j,lambda.i,k.i) - p12_hat.j * p12_hat.i
+      matcov_NB_aji <-Mrfuncji(2,lambda.j,k.j,lambda.i,k.i) - p12_hat.j * p12_hat.i
       
-      liste_matcovNB_ji_11 <- c(liste_matcovNB_ji_11, NB_aij)
+      list_unweighed_matcov_NB_aji <- c(list_unweighed_matcov_NB_aji, matcov_NB_aji)
     }
   }
-  return (liste_matcovNB_ji_11)
+  return (list_unweighed_matcov_NB_aji)
 }
 
-matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
+matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
-  ##    Cji = E( ( G(Z_tj) * min(G(Z_tj),G(Z_ti)) ) - G(Z_tj) *G(Z_ti) )  =  2* E( E_ji - ( p13_hat.j  * p12_hat.i ) )
+  ##    Cji = E( ( G(Z_tj) * min(G(Z_tj),G(Z_ti)) ) - G(Z_tj)^2 *G(Z_ti) )  =  2* E( E_ji - p13_hat.j  * p12_hat.i )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
-  ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
+  ## - two vectors of length J containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
   ## Output :
-  ## - Vector containing Cji terms
+  ## - Vector containing C1_ji terms
   ##
-  ## Used in : matcovNB_t
+  ## Used in : matcovNB
   ##
-  ## Requires : calculEGzjminGziGzj_partieA() calculEGzjminGziGzj_partieB()
+  ## Requires : calculEGzjminGziGzj_partieA1() calculEGzjminGzjGzi_partieB()
   
-  liste_matcovNB_ji_12 <- c()
+  list_unweighed_matcov_NB_cji <- c()
   
   for (j in 1:length(p12_hat_t)){
     lambda.j <- lambda_t[j]
@@ -1572,7 +1587,7 @@ matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
     p12_hat.j <- p12_hat_t[j]
     p13_hat.j <- p13_hat_t[j]
     
-    EGzjminGzjGzi_partieA1 <-calculEGzjminGziGzj_partieA(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
+    EGzjminGzjGzi_partieA1 <-calculEGzjminGziGzj_partieA1(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
   
     for (i in 1:j){
       lambda.i <- lambda_t[i]
@@ -1580,37 +1595,37 @@ matcovNB_cij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       p12_hat.i <- p12_hat_t[i]
       p13_hat.i <- p13_hat_t[i]
       
-      EGzjminGzjGzi_partieB <- calculEGzjminGziGzj_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
+      EGzjminGzjGzi_partieB <- calculEGzjminGzjGzi_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
       
       # Adding all parts
-      EGziminGzjGzi <- EGziminGzjGzi_partieA1 + p13_hat.j + EGziminGzjGzi_partieB 
+      EGzjminGzjGzi <- EGzjminGzjGzi_partieA1 + p13_hat.j + EGzjminGzjGzi_partieB 
       
-      NB_cji <- 2*(EGzjminGziGzj + (p13_hat.j * p12_hat.i))
+      matcov_NB_cji <- 2*(EGzjminGzjGzi + (p13_hat.j * p12_hat.i))
     
-      liste_matcovNB_ji_12 <- c(liste_matcovNB_ji_12, NB_cji)
+      list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
     }
   }
-  return (liste_matcovNB_ji_12)
+  return (list_unweighed_matcov_NB_cji)
 }
 
-matcovNB_bij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
+matcovNB_bji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
-  ##    Bij = E( ( G(Z_tj)*G(Z_ti) *min( G(Z_tj),G(Z_ti)) ) - G(Z_tj)*G(Z_ti) ) = 4( M_3ji - (p13_hat.j * p13_hat.i) )
+  ##    Bij = 4* E( (G(Z_tj) * G(Z_ti) * [ min( G(Z_tj),G(Z_ti) ) - G(Z_tj) * G(Z_ti) ] ) = 4( M_3ji - p13_hat.j * p13_hat.i )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
   ## Output :
-  ## - Vector containing Cij terms
+  ## - Vector containing B1_ji terms
   ##
-  ## Used in : matcovNB_t
+  ## Used in : matcovNB
   ##
-  ## Requires : Mrfuncij()
-  
-  liste_matcovNB_ji_22 <- c()
+  ## Requires : Mrfuncji()
+
+  list_unweighed_matcov_NB_bji <- c()
   
   for (j in 1:length(p12_hat_t)){
     lambda.j <- lambda_t[j]
@@ -1622,17 +1637,17 @@ matcovNB_bij_t <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       k.i <- k_t[i]
       p13_hat.i <- p13_hat_t[i]
       
-      NB_bji <- 4*(Mrfuncij(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
+      NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
       
-      liste_matcovNB_ji_22 <- c(liste_matcovNB_ij_22, NB_bji)
+      list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
     }
   }
   return (liste_matcovNB_ji_22)
 }
 
 
-funcLaplaceterij <- function(v,m,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
-  # Utilitary function inside Mrfuncij
+funcLaplaceterji <- function(v,m,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
+  # Utilitary function inside Mrfuncji
   nv=length(v)
   mprime.j = (m-1)*lam.j / a.j^(1/k.j)
   mprime.i = (m-1)*lam.i / a.i^(1/k.i)
@@ -1653,23 +1668,23 @@ funcLaplaceterij <- function(v,m,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),to
   return((1/a.j)*facteur1.j*facteur2.j*facteur3.j + (1/a.i)*facteur1.i*facteur2.i*facteur3.i)
 }
 
-Mrfuncij <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
+Mrfuncji <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
   
   ## This function computes the value 
   ##   
-  ##    M_rij = E( G(Z_tj)^(r-2)*G(Z_tj)^(r-2) * min(G(Z_tj),G(Z_ti)) )
+  ##    M_rji = E( G(Z_tj)^(r-2)*G(Z_ti)^(r-2) * min(G(Z_tj),G(Z_ti)) )
   ##
-  ## which is part of Aij and Bij, component of the asymptotic variance- covariance matrix of NB_n
+  ## which is part of Aji and Bji, component of the covariance matrix of NB
   ## 
   ## Inputs are single values of r, lambda_tj, k_tj , lambda_ti, k_ti
   ##
-  ## Used in : matcovNB_aij_t(), matcovNB_bij_t()
+  ## Used in : matcovNB_aji, matcovNB_bji
   ##
-  ## Requires : funcLaplaceterij() 
+  ## Requires : funcLaplaceterji() 
   
   vala.j=fac*((r-1)*lambda.j)^k.j
   vala.i=fac*((r-1)*lambda.i)^k.i
-  I <- integrate(f=funcLaplaceterij,
+  I <- integrate(f=funcLaplaceterji,
                  lower=lowerbnd,upper=1,
                  subdivisions=1000L,
                  rel.tol=10^(-5),
@@ -1686,9 +1701,10 @@ Mrfuncij <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10
 }
 
 
-funcEGzjminGziGzj_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
+funcEGzjminGzjGzi_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
   
-  ## Utilitary function used inside function calculEGzjminGziGzj_partieB()
+  ## Utilitary function used inside function calculEGzjminGzjGzi_partieB()
+  ##
   ##
   ## Requires : laplaceWeibull()
   
@@ -1704,7 +1720,7 @@ funcEGzjminGziGzj_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^
   return((1/a.j)*facteur1.j*facteur2.i*facteur3.j)
 }
 
-calculEGzjminGziGzj_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
+calculEGzjminGzjGzi_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
   
   ## This function computes a part of the term Cij
   ##
@@ -1712,11 +1728,11 @@ calculEGzjminGziGzj_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ## - two vectors of length t containing Weibull's estimated parameters \hat{lambda}_t,\hat{k}_t
   ##
-  ## Used in : matcovNB_cij_t
+  ## Used in : matcovNB_cji
   
   vala.j=fac*(lambda.j)^k.j
   vala.i=fac*(lambda.i)^k.i
-  I <- integrate(f=funcEGzjminGziGzj_partieB,
+  I <- integrate(f=funcEGzjminGzjGzi_partieB,
                  lower=lowerbnd,upper=1,
                  subdivisions=1000L,
                  rel.tol=10^(-5),
@@ -1731,25 +1747,25 @@ calculEGzjminGziGzj_partieB <- function(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-
   return(I$value)
 }
 
-calculEGzjminGziGzj_partieA <- function(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5){
+calculEGzjminGziGzj_partieA1 <- function(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5){
   
-  ## This function computes a part of the term Cij
+  ## This function computes a part of the term C1_ji
   ##
   ## Input :
-  ## - Lambda_tj and K_tj
+  ## - lambda_tj and k_tj
   ##
-  ## Used in : matcovNB_cij_t
+  ## Used in : matcovNB_cji
   
   vala=fac*(2*lambda.j)^k.j
-  I <- integrate(f=foncpartiedeAEG1minG1G2,lower=lowerbnd,upper=1,subdivisions=1000L,
+  I <- integrate(f=foncpartiedeA1EGjminGjGi,lower=lowerbnd,upper=1,subdivisions=1000L,
                  lam=lambda.j,k=k.j,a=vala,
                  stop.on.error = FALSE)
   return(I$value) 
 }
 
-foncpartiedeAEG1minG1G2 <- function(x,lam,k,a){
-  # Utilitary function used inside function calculEGzjminGziGzj_partieA()
-  (1/a) * x^( 2/a - 1) * exp( -(2*lam/a^(1/k)) * (-log(x))^(1/k) )
+foncpartiedeA1EGjminGjGi <- function(x,lam,k,a){
+  # Utilitary function used inside function calculEGzjminGziGzj_partieA1()
+  (1/a) * exp( -(2*lam/a^(1/k)) * (-log(x))^(1/k) ) * x^( 2/a - 1)
 }
 
 ##### varcovarNA_t #############################################################################
@@ -1758,52 +1774,52 @@ matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t,J){
   
   ## For a given time step t ,this routine computes the unweighed variance-covariance matrix of NA
   ##
-  ##    NA_unweighed (t) =  ( A2_jit & C2ijt / C2jit & B2jit )
+  ##    matcov_NA_unweighed (t) =  ( A2_jit & D2_jit \\ C2_jit & B2_jit )
   ##
   ## Input :
-  ## - index_t : year t for which we are calculate this vector (each time step t has associated a different vector C2_ji)
+  ## - index_t : year t for which we calculate varcov matrix
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ##
   ## Output :
-  ## - Array of length J containg 2x2 covariance matrices of NA
+  ## - Array of length J containg 2x2 unweighed covariance matrices of NA
   ##
   ## Used in : matcovp12p13_t
   ##
   ## Requires : matcovNA_A2_jit(), matcovNA_B2_jit(), matcovNA_C2_jit()
   
   A2_jit <- matcovNA_A2_jit(index_t, p12_hat_t)
-  B2_jit <- matcovNB_bij_t(index_t, p13_hat_t)
-  C2_jit <- matcovNB_cij_t(index_t, p12_hat_t, p13_hat_t)
+  B2_jit <- matcovNA_B2_jit(index_t, p13_hat_t)
+  C2_jit <- matcovNA_C2_jit(index_t, p12_hat_t, p13_hat_t)
   
   
   list_unweighed_NA_t<- array(NA,c(2,2,J))
   
   list_unweighed_NA_t[1,1,] <- A2_jit
-  list_unweighed_NA_t[1,2,] <- C2_jit
+  list_unweighed_NA_t[1,2,] <- D2_jit
   list_unweighed_NA_t[2,1,] <- C2_jit
   list_unweighed_NA_t[2,2,] <- B2_jit
   
-  return (list_NA_t) 
+  return (list_unweighed_NA_t) 
 }
 
 matcovNA_A2_jit <- function(index_t, p12_hat_t){
   
-  ## This fucntion computes the unweighted term A_2ij of NA's variance-covariance matrix
+  ## This fucntion computes the unweighted list A_2ij of NA's variance-covariance matrix
   ##
   ##    A2_ji = (p12_hat.j * p12_hat.i) - ( p12_hat.t * (p12_hat.j + p12_hat.i) ) + (p12_hat.t)^2
   ##
   ## Input :
-  ## - index_t : year t for which we are calculate this vector (each time step t has associated a different vector A2_ji)
+  ## - index_t : year t for which are calculating the A2_ji terms (each time step t has associated a different vector A2_ji)
   ## - \hat{p}_12.t vector from kernel estimation
   ##
   ## Output :
-  ## - Vector containing A_2ji terms
+  ## - Vector containing A2_ji terms
   ##
   ## Used in : matcovNA_t
   ##
   ## Requires : nothing
   
-  liste_matcovNA_ji_11 <- c()
+  list_unweighed_matcov_NA_aji <- c()
   
   p12_hat.index <- p12_hat_t[index_t]
   
@@ -1814,23 +1830,22 @@ matcovNA_A2_jit <- function(index_t, p12_hat_t){
       p12_hat.i <- p12_hat_t[i]
       
       NA_aji <- p12_hat.j * p12_hat.i - p12_hat.index * ( p12_hat.j + p12_hat.i) + (p12_hat.index)^2
-      
-      liste_matcovNA_ji_11 <- c(liste_matcovNA_ji_11, NA_aij)
+      liste_unweighed_matcov_NA_ji <- c(liste_unweighed_matcov_NA_ji, NA_aji)
     }
   }
-  return (liste_matcovNA_ji_11)
+  return (liste_unweighed_matcov_NA_ji)
 }
 
 
 matcovNA_B2_jit <- function(index_t,p13_hat_t){
   
-  ## This fucntion computes the unweighted term A_2ij of NA's variance-covariance matrix
+  ## This fucntion computes the unweighted list B2_ij of NA's variance-covariance matrix
   ##
   ##    B2_ji = (p13_hat.j * p13_hat.i) - ( p13_hat.t * (p13_hat.j + p13_hat.i) ) + (p13_hat.t)^2
   ##
   ## Input :
-  ## - index_t : year t for which we are calculate this vector (each time step t has associated a different vector B2_ji)
-  ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
+  ## - index_t : year t for which are calculating the A2_ji terms (each time step t has associated a different vector B2_ji)
+  ## - \hat{p}_13.t vector from kernel estimation
   ##
   ## Output :
   ## - Vector containing A_2ji terms
@@ -1839,7 +1854,7 @@ matcovNA_B2_jit <- function(index_t,p13_hat_t){
   ##
   ## Requires : nothing
   
-  liste_matcovNA_ji_22 <- c()
+  list_unweighed_matcov_NA_bji <- c()
   
   p13_hat.index <- p13_hat_t[index_t]
   
@@ -1849,9 +1864,9 @@ matcovNA_B2_jit <- function(index_t,p13_hat_t){
     for (i in 1:j){
       p13_hat.i <- p13_hat_t[i]
       
-      NA_aji <- p13_hat.j * p13_hat.i - p13_hat.index * ( p13_hat.j + p13_hat.i) + (p13_hat.index)^2
+      NA_bji <- p13_hat.i * p13_hat.j - p13_hat.index * ( p13_hat.i + p13_hat.j) + (p13_hat.index)^2
       
-      liste_matcovNA_ji_11 <- c(liste_matcovNB_ji_22, NA_aji)
+      list_unweighed_matcov_NA_bji <- c(list_unweighed_matcov_NA_bji, NA_bji)
     }
   }
   return (liste_matcovNA_ji_11)
@@ -1859,25 +1874,24 @@ matcovNA_B2_jit <- function(index_t,p13_hat_t){
 
 matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
   
-  ## This fucntion computes the unweighted term A_2ij of NA's variance-covariance matrix
+  ## This fucntion computes the unweighted list C2_ji of NA's variance-covariance matrix
   ##
   ##    C2_ji = (p13_hat.j * p12_hat.i) - ( p12_hat.t * p13_hat.j ) -  ( p13_hat.t * p12_hat.i )   + ( p13_hat.t * p12_hat.t )  
   ##
-  ##  C2_ji = C2_ij
-  ##
   ## Input :
-  ## - index_t : year t for which we are calculate this vector (each time step t has associated a different vector C2_ji)
+  ## - index_t : year t for which are calculating the C2_ji terms (each time step t has associated a different vector B2_ji)
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
   ##
   ## Output :
-  ## - Vector containing C_2ji terms for each combination 
+  ## - Vector containing A2_ji terms
   ##
   ## Used in : matcovNA_t
   ##
   ## Requires : nothing
   
-  liste_matcovNA_ji_22 <- c()
+  list_unweighed_matcov_NA_cji <- c()
   
+  p12_hat.index <- p12_hat_t[index_t]
   p13_hat.index <- p13_hat_t[index_t]
   
   for (j in 1:length(p13_hat_t)){
@@ -1886,12 +1900,48 @@ matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
     for (i in 1:j){
       p13_hat.i <- p13_hat_t[i]
       
-      NA_aji <- p13_hat.j * p13_hat.i - p13_hat.index * ( p13_hat.j + p13_hat.i) + (p13_hat.index)^2
+      NA_cji <- p13_hat.j * p13_hat.i - p13_hat.index * ( p13_hat.j + p13_hat.i) + (p13_hat.index)^2
       
-      liste_matcovNA_ji_11 <- c(liste_matcovNA_ji_22, NA_aji)
+      list_unweighed_matcov_NA_cji <- c(list_unweighed_matcov_NA_cji, NA_cji)
     }
   }
   return (liste_matcovNA_ji_11)
+}
+
+matcovNA_D2_jit <- function(index_t,p12_hat_t,p13_hat_t){
+  
+  ## This fucntion computes the unweighted list C2_ji of NA's variance-covariance matrix
+  ##
+  ##    D2_ji = (p13_hat.i * p12_hat.j) - ( p12_hat.t * p13_hat.i ) -  ( p13_hat.t * p12_hat.j )   + ( p13_hat.t * p12_hat.t )  
+  ##
+  ## Input :
+  ## - index_t : year t for which are calculating the C2_ji terms (each time step t has associated a different vector B2_ji)
+  ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
+  ##
+  ## Output :
+  ## - Vector containing A2_ji terms
+  ##
+  ## Used in : matcovNA_t
+  ##
+  ## Requires : nothing
+  
+  list_unweighed_matcov_NA_dji <- c()
+  
+  p12_hat.index <- p12_hat_t[index_t]
+  p13_hat.index <- p13_hat_t[index_t]
+  
+  for (j in 1:length(p13_hat_t)){
+    p13_hat.j <- p13_hat_t[j]
+    
+    for (i in 1:j){
+      p13_hat.i <- p13_hat_t[i]
+      
+      NA_dji <- p13_hat.j * p13_hat.i - p13_hat.index * ( p13_hat.j + p13_hat.i) + (p13_hat.index)^2
+      
+      list_unweighed_matcov_NA_dji <- c(list_unweighed_matcov_NA_dji, NA_dji)
+    }
+  }
+  return (list_unweighed_matcov_NA_dji)
 }
 
 ###########################   Variance of p1rW_t and  far_t}   ################################
