@@ -1449,22 +1449,22 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
   p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
   
-  list_unweighed_matcov_N_t<- array(NA,c(2,2,J))
+  list_weighed_matcov_N_t<- array(NA,c(2,2,J))
   
-  list_unweighed_matcov_NB <- matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t,J)
+  list_unweighed_matcov_NB <- matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
   
   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   
   for (index_t in 1:J){
     
-    list_unweighed_matcov_NA_t<-matcov_NA_t(index_t, p12_hat.vec, p13_hat.vec,J)
+    list_unweighed_matcov_NA_t<-matcovNA_t(index_t, p12_hat.vec, p13_hat.vec)
     
-    list_unweighed_matcov_N_t[,,index_t]<- list_unweighed_matcov_NB[,,index_t] + list_unweighed_matcov_NA_t[,,index_t]
+    list_unweighed_matcov_N_t<- list_unweighed_matcov_NB + list_unweighed_matcov_NA_t
     
     Aji <- list_unweighed_matcov_N_t[1,1,]
     Bji <- list_unweighed_matcov_N_t[2,2,]
     Dji <- list_unweighed_matcov_N_t[1,2,]
-    Cij <- list_unweighed_matcov_N_t[2,1,]
+    Cji <- list_unweighed_matcov_N_t[2,1,]
     
     denom<-(sum(Kh[index_t,]))^2
     
@@ -1481,17 +1481,19 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
         list_Wji_t <- c(list_Wji_t, KhjKhi)
       }
     }
-    list_weighed_matcov_N_t[1,1,index_t] <- sum(list_Wij_t * Aji) / denom
-    list_weighed_matcov_N_t[1,2,index_t] <- sum(list_Wij_t * Dji) /denom
-    list_weighed_matcov_N_t[2,1,index_t] <- sum(list_Wij_t * Cij) /denom
-    list_weighed_matcov_N_t[2,2,index_t] <- sum(list_Wij_t * Bji) /denom
+    list_weighed_matcov_N_t[1,1,index_t] <- sum(list_Wji_t * Aji) / denom
+    list_weighed_matcov_N_t[1,2,index_t] <- sum(list_Wji_t * Dji) /denom
+    list_weighed_matcov_N_t[2,1,index_t] <- sum(list_Wji_t * Cji) /denom
+    list_weighed_matcov_N_t[2,2,index_t] <- sum(list_Wji_t * Bji) /denom
+    
+    #list_weighed_matcov_N_t<- c(list_weighed_matcov_N_t,list_weighed_matcov_N_t)
   }
-  return(list_weighed_varcov_N_t)
+  return(list_weighed_matcov_N_t)
 }
 
 ##### varcovarNB #############################################################################
 
-matcovNB <- function(p12_hat_t, p13_hat_t,lambda_t,k_t,J){
+matcovNB <- function(p12_hat_t, p13_hat_t,lambda_t,k_t){
   
   ## This routine computes the unweighed variance-covariance matrix of NA
   ##
@@ -1515,11 +1517,13 @@ matcovNB <- function(p12_hat_t, p13_hat_t,lambda_t,k_t,J){
   B1_ji <- matcovNB_bji(p12_hat_t,p13_hat_t,lambda_t,k_t)
   C1_ji <- matcovNB_cji(p12_hat_t,p13_hat_t,lambda_t,k_t)
   
-  list_unweighed_matcov_NB <- array(NA,c(2,2,J))
+  Ncombinations<-length(A1_ji)
+  
+  list_unweighed_matcov_NB <- array(NA,c(2,2,Ncombinations))
   
   list_unweighed_matcov_NB[1,1,] <- A1_ji
   list_unweighed_matcov_NB[1,2,] <- C1_ji 
-  list_unweighed_matcov_NB[2,1,] <- C1_ij 
+  list_unweighed_matcov_NB[2,1,] <- C1_ji 
   list_unweighed_matcov_NB[2,2,] <- B1_ji 
   
   return (list_unweighed_matcov_NB) 
@@ -1642,7 +1646,7 @@ matcovNB_bji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
     }
   }
-  return (liste_matcovNB_ji_22)
+  return (list_unweighed_matcov_NB_bji)
 }
 
 
@@ -1770,7 +1774,7 @@ foncpartiedeA1EGjminGjGi <- function(x,lam,k,a){
 
 ##### varcovarNA_t #############################################################################
 
-matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t,J){
+matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t){
   
   ## For a given time step t ,this routine computes the unweighed variance-covariance matrix of NA
   ##
@@ -1790,9 +1794,11 @@ matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t,J){
   A2_jit <- matcovNA_A2_jit(index_t, p12_hat_t)
   B2_jit <- matcovNA_B2_jit(index_t, p13_hat_t)
   C2_jit <- matcovNA_C2_jit(index_t, p12_hat_t, p13_hat_t)
+  D2_jit <- matcovNA_D2_jit(index_t, p12_hat_t, p13_hat_t)
   
+  Ncombiantions<-length(A2_jit)
   
-  list_unweighed_NA_t<- array(NA,c(2,2,J))
+  list_unweighed_NA_t<- array(NA,c(2,2,Ncombiantions))
   
   list_unweighed_NA_t[1,1,] <- A2_jit
   list_unweighed_NA_t[1,2,] <- D2_jit
@@ -1830,10 +1836,10 @@ matcovNA_A2_jit <- function(index_t, p12_hat_t){
       p12_hat.i <- p12_hat_t[i]
       
       NA_aji <- p12_hat.j * p12_hat.i - p12_hat.index * ( p12_hat.j + p12_hat.i) + (p12_hat.index)^2
-      liste_unweighed_matcov_NA_ji <- c(liste_unweighed_matcov_NA_ji, NA_aji)
+      list_unweighed_matcov_NA_aji <- c(list_unweighed_matcov_NA_aji, NA_aji)
     }
   }
-  return (liste_unweighed_matcov_NA_ji)
+  return (list_unweighed_matcov_NA_aji)
 }
 
 
@@ -1869,7 +1875,7 @@ matcovNA_B2_jit <- function(index_t,p13_hat_t){
       list_unweighed_matcov_NA_bji <- c(list_unweighed_matcov_NA_bji, NA_bji)
     }
   }
-  return (liste_matcovNA_ji_11)
+  return (list_unweighed_matcov_NA_bji)
 }
 
 matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
@@ -1896,16 +1902,18 @@ matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
   
   for (j in 1:length(p13_hat_t)){
     p13_hat.j <- p13_hat_t[j]
+    p12_hat.j <- p12_hat_t[j]
     
     for (i in 1:j){
       p13_hat.i <- p13_hat_t[i]
+      p12_hat.i <- p12_hat_t[i]
       
-      NA_cji <- p13_hat.j * p13_hat.i - p13_hat.index * ( p13_hat.j + p13_hat.i) + (p13_hat.index)^2
+      NA_cji <- p13_hat.j * p13_hat.i - p12_hat.index *  p13_hat.j - p13_hat.index * p12_hat.i + p13_hat.index * p13_hat.index
       
       list_unweighed_matcov_NA_cji <- c(list_unweighed_matcov_NA_cji, NA_cji)
     }
   }
-  return (liste_matcovNA_ji_11)
+  return (list_unweighed_matcov_NA_cji)
 }
 
 matcovNA_D2_jit <- function(index_t,p12_hat_t,p13_hat_t){
@@ -1932,11 +1940,13 @@ matcovNA_D2_jit <- function(index_t,p12_hat_t,p13_hat_t){
   
   for (j in 1:length(p13_hat_t)){
     p13_hat.j <- p13_hat_t[j]
+    p12_hat.j <- p12_hat_t[j]
     
     for (i in 1:j){
       p13_hat.i <- p13_hat_t[i]
+      p12_hat.i <- p12_hat_t[i]
       
-      NA_dji <- p13_hat.j * p13_hat.i - p13_hat.index * ( p13_hat.j + p13_hat.i) + (p13_hat.index)^2
+      NA_dji <- p13_hat.i * p12_hat.j - p12_hat.index *  p13_hat.i - p13_hat.index * p12_hat.j + p13_hat.index * p12_hat.index
       
       list_unweighed_matcov_NA_dji <- c(list_unweighed_matcov_NA_dji, NA_dji)
     }
