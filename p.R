@@ -2045,7 +2045,7 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
     list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Cji) /denom
     list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Bji) /denom
   }
-  matcov_p1rfar<-varp1rfar_t(r,list_weighed_matcov_N_t, X, Z, GmZ,tt,t_eval,h)
+  matcov_p1rfar<-varp1rfar_t(r,list_weighed_matcov_N_t, X.vec, Z.vec, GmZ,tt,t_eval,h)
   p1r<-matcov_p1rfar$p1r_t
   stdp1rW <- sqrt(matcov_p1rfar$varp1r_t)
   zalpha <- qnorm(1-alpha/2)
