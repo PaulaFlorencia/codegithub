@@ -54,10 +54,16 @@ df <-data.frame(x=tt,y=p12_hat,z1=ic$low, z2=ic$high,heo=p12_theo)
 p12plot<-ggplot(df,aes(x=tt,y=p12_hat)) + geom_line(colour="red")  +
   geom_line(aes(y=p12_theo), colour="black")
 p12plot <- p12plot+geom_ribbon(aes(ymin=ic$low, ymax=ic$high), linetype=2, alpha=0.1) 
-p12plot <- p12plot +ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
+p12plot <- p12plot + ggtitle(expression(p[12[t]]))+ ylab(expression(p[12])) + xlab("time") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))
 p12plot
 
+X <- rgev(m,loc=4.45,scale= 1.42,shape= -0.04)
+plot(density(X))
+Z <- rgev(n,loc=5.76,scale=1.57,shape= - 0.01)
+lines(density(Z))
 
+test3<-simulclass
 ##############################  Quality of convergence   ########################################
 
 # Computation of multiple samples (X,Z)
@@ -85,16 +91,19 @@ df <-data.frame(x=tt,y=p12_hat_moyen,z1=ic_samples_low , z2=ic_samples_high ,the
 p12plot<-ggplot(df,aes(x=tt,y=p12_hat_moyen)) + geom_line(colour="red") + 
   geom_line(aes(y=p12_theo), colour="black")+ 
   geom_ribbon(aes(ymin=ic_samples_low, ymax=ic_samples_high), linetype=2, alpha=0.1) + 
-  ggtitle("p12 evolution over time") + ylab("p12") + xlab("time")
+  ggtitle(expression(p[12[t]])) + ylab(expression(p[12])) + xlab("time") + 
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))
 p12plot
 
 # Error between p12_theo and p12_hat
 p12_error <- abs(p12_theo - p12_hat_moyen)
-plot(tt, p12_error, main="Error of estimation", type="l",ylab="error", xlab="temps")
+plot(tt, p12_error,main="Conditional estimation error", type="l", col="darkblue", ylab=expression(widehat(p)[12[t]]-p[12[t]]), xlab="time",
+     panel.first=grid())
 
 # Incertitude of estimation
 ic_error <- ic_samples_high - ic_samples_low
-plot(tt, ic_error, main="Incertitude of estimation",type="l", ylab=" difference", xlab="temps")
+plot(tt, ic_error, main="Conditional incertitude of estimation",type="l",col="darkblue", ylab="Incertitude", xlab="time",
+     panel.first=grid())
 
 # max error evolution within N (Global error)
 Nn=50
@@ -126,7 +135,7 @@ for (j in 1:Nn) {
 }
 matplot(x= tt , y= as.matrix(conditional_error), type='l', pch=1, col= 2:5, xlab='tt', ylab = 'error')
 
-Nn=c(5,50,500)
+Nn=c(1,2,3)
 mean_p12 <- matrix(0,size,length(Nn))
 conditional_error <- matrix(0,size,length(Nn))
 for (j in 1:length(Nn)) {
@@ -137,7 +146,10 @@ for (j in 1:length(Nn)) {
   conditional_error[,j] <- abs(mean_p12[,j] - p12_theo)
 }
 
-matplot(x= tt , y= conditional_error, type='l', pch=1, col= 2:5, xlab='tt', ylab = 'error')
+nn<-ncol(conditional_error)
+matplot(x= tt , y= conditional_error, type='l', pch=1, col= 2:5, xlab='time',
+        ylab =expression(widehat(p)[12[t]]-p[12[t]]), main="Conditional estimation error")
+legend(0.15, 0.04, c("N=1", "N=2","N=3"), col = seq_len(nn),cex=0.6,fill=seq_len(nn))
 
 for (j in Nn) {print(j)}
 # rouge,vert, bleu 
@@ -149,7 +161,7 @@ h1=0.01; h2=0.1; h3=1
 
 # Gumbel
 p12_g1<-p12_NonPar(X,Z,tt,tt,h1); p12_g2<-p12_NonPar(X,Z,tt,tt,h2); p12_g3<-p12_NonPar(X,Z,tt,tt,h3)
-G_emp_X <- ecdf(X); G_Z <- G_emp(Z)
+G_emp <- ecdf(X);G_Z <- G_emp(Z)
 df_g<-data.frame(x=tt, y1=p12_g1, y2=p12_g2, y3=p12_g3, theo=p12_theo, g=G_Z)
 hchoix_g<-ggplot(df_g,aes(x=tt,y=G_Z)) + geom_point(colour="#999999",size=0.5, shape=23)+
   geom_line(aes(y=p12_theo), colour="black")+ geom_line(aes(x=tt,y=p12_g1,colour="red"))+
@@ -158,8 +170,8 @@ hchoix_g
 
 # Frechet
 p12_f1<-p12_NonPar(x,z,tt,tt,h1); p12_f2<-p12_NonPar(x,z,tt,tt,h2); p12_f3<-p12_NonPar(x,z,tt,tt,h3)
-G_emp_x<-ecdf(x); G_z<-G_emp(z)
-df_f<-data.frame(x=tt,y1=p12_f1,y2=p12_f2,y3=p12_f3,theo=p12_theo,g=G_z)
+G_emp<-ecdf(x); G_z<-G_emp(z)
+df_h_2<-data.frame(x=tt,y1=p12_f1,y2=p12_f2,y3=p12_f3,theo=p12_theo,g=G_z)
 hchoix_f<-ggplot(df_h_2,aes(x=tt,y=G_z)) + geom_point(colour="#999999",size=0.5, shape=23)+
   geom_line(aes(y=p12_theo), colour="black")+geom_line(aes(x=tt,y=p12_f1,colour="red"))+
   geom_line(aes(x=t,y=p12_f2,colour="blue"))+geom_line(aes(x=tt,y=p12_f3,colour="green"))
@@ -173,12 +185,12 @@ tt <- seq.int(size)/size
 t_eval <- seq.int(size)/size
 
 error_vector<-CV_error(x,z,tt,tt,h_seq,kern= dEpan)
-
+h_opt <- error_vector$opt_err # optimal bandwith = 0.11
+#return(list("optimal_bandwith"= h_opt,"optimal_error"= opt_err ,"list_errors"= CV_err_h) )#vector of errors
+opt_err <- min(error_vector$CV_err_h[[1]]) # optimal erreur = 0.03589835
 # Error plot 
 plot(x=h_seq, y=error_vector, type="b", lwd=3, col="blue",
      xlab="Smoothing bandwidth", ylab="LOOCV prediction error")
-h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]; h_opt # optimal bandwith = 0.11
-opt_err <-min(CV_err_h); opt_err # optimal erreur = 0.03589835
 
 
 ################## Trajectories with random location parameter ###############################
@@ -201,11 +213,11 @@ size <-  250*4
 tt <- seq.int(size)/size
 N <- 2 #number of trajectories
 ui<-rnorm(N) 
-bi<-rnorm(N,mean=1,sd=0.1)
+bi<-rnorm(N,mean=mean1,sd=0.1)
 scale_Z_real=1
 shape_Z_real=0
 Z_real<-Z_real_comp(size,scale=1,shape=0) # "real" factual(Z) and couterfactual(X) run
-X_real<-rgev(size*5, loc=mean, scale=1, shape=0)
+X_real<-rgev(size*5, loc=0, scale=1, shape=0)
 X1<-rgev(size*5, loc=ui[1], scale=1, shape=0) # run from model 1
 Z1<-rgev(size, loc = ui[1]+bi[1]*tt, scale = 1, shape = 0)
 X2<-rgev(size*5, loc=ui[2], scale=1, shape=0) # run from model 2
@@ -236,9 +248,8 @@ p12hat_moyen<- (p12_1 + p12_2)/2
 df_Ex <-data.frame(temp=tt, y1=p12_1, y2=p12_2, y3= p12hat_moyen, z1=ic_1$low,z2=ic_1$high,z3=ic_2$low,z4=ic_2$high)
 p12plot<-ggplot(df_Ex,aes(x=tt,y=p12_1))+ geom_line(colour="red")+geom_ribbon(aes(ymin=ic_1$low, ymax=ic_1$high), linetype=2, alpha=0.1)+
   geom_line(aes(y=p12_2), colour="blue")+geom_ribbon(aes(ymin=ic_2$low, ymax=ic_2$high), linetype=2, alpha=0.1) +  geom_line(y=p12hat_moyen, colour="green")+
-  geom_hline(yintercept = 0.5) + ggtitle("p02 estimation over time") + ylab("p02") + xlab("time")
+  geom_hline(yintercept = 0.5) + gg(expression(p02[t]~estimation~over~time)) + ylab("p02") + xlab("time")
 p12plot
-
 ################################################################################################
 #### 2. p13_t observations                                                                  ####
 ################################################################################################
@@ -456,7 +467,8 @@ testmoyen<-FastTestforp1r_frechet(tt,0.5,5,size*2,size,10,xi,sigma,rep(1,size*2)
 
 FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
   theta_theo <- sigma.vec^(-1 / rep(xi,n))
-  p12_theo <- 1 / (1 + theta_theo)
+  p1r_t_theo <- 1 / (1 + (r-1)*theta_theo)
+  #p12_theo <- 1 / (1 + theta_theo)
   
   matX <- matrix(nrow=m,ncol=N)
   matZ <- matrix(nrow=n,ncol=N)
@@ -485,13 +497,17 @@ FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
 #### 5. Simulation of W-class trajectories with F = non-stationary                          ####
 ################################################################################################
 
-size=200
+size=250*4
 tt <- seq.int(size)/size
-sigma <- seq(1, 2, length.out = size)
-simul<-simulWclass_nonStationnary(m=size*2,n=size,N=1,ksiX=0.2,ksiZ=0.25,sigX=0.7,muX=0,muZ=sigma,sigZ=0,unknownMu=FALSE) 
+#sigma <- seq(1, 2, length.out = size)
+mu = 2 + seq(0, 5, length.out = size) 
+simul<-simulWclass_nonStationnary_general(I=size*2,N=1,ksiX=0.2,sigX=0.7,muX=0,ksiZ=rep(0.25,size),muZ=mu,sigZ=NULL,unknown="scale", graph=TRUE) 
 G<-ecdf(simul$matX)
 plot(tt,G(simul$matZ))
+simulWclass_nonStationnary_general <-function(I,N,ksiX,sigX=1,muX=0,ksiZ=NULL,muZ=NULL,sigZ=NULL,unknown="location", graph=TRUE)
 
+  X = rgev(size * 5, loc = 0, scale = 1, shape = 0)
+Z = rgev(size, loc = mu, scale = 1, shape = 0)
 
 ####  Visualisation of de evolution on the trajectories {(X)t,(Z)t} ############################
 a<-length(simul$mu_Z)
@@ -512,33 +528,33 @@ size=20
 tt <- seq.int(size)/size
 # ksi!=0 , ksiZ constant, sigZ variable, mu unknown
 sigma <- seq(1, 3, length.out = size)
-simul1<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=NULL,sigZ=sigma,unknown="location")
+simul1<-simulWclass_nonStationnary_general(I=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=NULL,sigZ=sigma,unknown="location")
 # ksi!=0 , ksiZ variable, sigZ variable, mu unknown
 sigma <- seq(1, 3, length.out = size)
 ksi <- seq(0.1,0.2,length.out = size)
-simul2<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0,ksiZ=ksi,muZ=NULL,sigZ=sigma,unknown="location")
+simul2<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0.1,sigX=1,muX=0,ksiZ=ksi,muZ=NULL,sigZ=sigma,unknown="location")
 # ksi!=0 , ksiZ constant, sigZ variable, sig unknown
 mu <- seq(1, 2, length.out = size)
-simul3<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=mu,sigZ=NULL,unknown="scale")
+simul3<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0.20,sigX=1,muX=0,ksiZ=rep(0.25,size),muZ=mu,sigZ=NULL,unknown="scale")
 # ksi!=0 , ksiZ variable, sigZ variable, sig unknown
 sigma <- seq(1, 3, length.out = size)
 ksi <- seq(0.1,0.2,length.out = size)
-simul4<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=ksi,muZ=mu,sigZ=NULL,unknown="scale")
+simul4<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=ksi,muZ=mu,sigZ=NULL,unknown="scale")
 
 # ksi!=0 , muZ constant, sigZ variable, ksi unknown
 sigma <- seq(1, 2, length.out = size)
-simul5<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=NULL,muZ=1,sigZ=sigma,unknown="shape") # pourquoi lam const?
+simul5<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=NULL,muZ=1,sigZ=sigma,unknown="shape") # pourquoi lam const?
 sigma <- seq(1, 3, length.out = size)
-simul6<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=NULL,muZ=1,sigZ=sigma,unknown="shape")
+simul6<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0.1,sigX=1,muX=0.2,ksiZ=NULL,muZ=1,sigZ=sigma,unknown="shape")
 # -> lambda est toujours constante
 # ksi!=0 , muZ variable, sigZ variable, ksi unknown
 mu <- seq(1, 2, length.out = size)
-simul7<-simulWclass_nonStationnary(m=size,N=1,ksiX=0.25,sigX=1,muX=0.2,ksiZ=NULL,muZ=mu,sigZ=sigma,unknown="shape") 
+simul7<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0.25,sigX=1,muX=0.2,ksiZ=NULL,muZ=mu,sigZ=sigma,unknown="shape") 
 
 # ksi==0 , muZ variable, sigZ variable, ksi unknown
 sigma <- seq(1, 3, length.out = size)
 mu <- seq(1, 2, length.out = size)
-simul8<-simulWclass_nonStationnary(m=size,N=1,ksiX=0,sigX=1,muX=0.2,ksiZ=0,muZ=mu,sigZ=sigma) 
+simul8<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0,sigX=1,muX=0.2,ksiZ=0,muZ=mu,sigZ=sigma) 
 
 
 
@@ -774,7 +790,7 @@ plot(density(X))
 Z <- rgev(m,loc=26.04,scale=0.12,shape=0.06)
 lines(density(Z))
 # point 200
-X <- rgev(m,loc=25.27,scale=0.25,shape=0.16)
+X <- rgev(m,loc=25.27,scale=0.25,shape=0.16)##################
 plot(density(X))
 Z <- rgev(m,loc=25.67,scale=0.22,shape=0.25)
 lines(density(Z))
@@ -871,4 +887,36 @@ lines(tt,param2$khat,col="red")
 plot(tt,lambda_t_theo,type="l", main="lambda estimation")
 lines(tt,param$lambdahat,col="blue")
 lines(tt,param2$lambdahat,col="red")
+
+################################################################################################
+#### Testing functions that compute the confidence interval of p1rt                         ####
+################################################################################################
+
+# We will forst need to have a X,Z an tt
+
+
+## Function calcul_ICp1r does everything and and show plot p1rt and its lower and upper bound
+##############################################################################################
+ploticp1r_test1<-calcul_ICp1r(r=5,X, Z,tt,tt,h=20,alpha=0.5)
+
+# We can also see the result of the different steps (some computations might be repeted)
+##############################################################################################
+# var-covar matrix of p12,p13
+matcovp12p13_test1<-matcovp12p13_t(X_real, Z_real,tt_real,tt_real,h=20)
+
+# varcov matrix for (lambda,k)
+G_m<-ecdf(X_real)
+GmZ<-G_m(Z_real)
+matcovparam_test1<-matcovtheta_t(matcovp12p13_test1, X, Z, GmZ,tt,tt,h=20)
+
+# p1r at par variance estimation
+matcov_p1rfar<-varp1rfar_t(r=5,matcovp12p13_test1, X, Z, GmZ,tt,tt_real,h=20)
+matcov_p1rfar$varp1r_t
+
+# Confodence intervals of p1r (and plot)
+confinterl_test1<-CI_p1rfar(matcov_p1rfar$p1r_t,matcov_p1rfar$varp1r_t,r=7,J=length(Z),tt,alpha=0.5)
+
+
+
+
 
