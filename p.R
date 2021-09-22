@@ -1100,13 +1100,13 @@ FastTestforp1r_gumbel <- function(tt,h,r,I,J,N,sigX.vec,sigZ.vec,muX.vec,muZ.vec
     GZ<-matGZ_func(matX,matZ)
     thetahat<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
   }
-  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=n))
+  p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(r,ncol=N,nrow=J))
   p1r_mean <- rowMeans(p1rfar$p1r)
-  plot(tt,p1r_t_theo,type="l",col="red",xlab="time",ylab="p1r_t", main=paste("evolution over time of p1r with r=",r))
-  lines(tt,p1r_mean)
-  for (i in 1:N){
-    lines(tt,p1rfar$p1r[,i],col="gray")
-  }
+  plot(tt,p1r_t_theo,type="l",col="black",xlab="time",ylab=expression(p["1,10,t"]), main=expression(Evolution ~  over  ~ time  ~ of ~ p["1,10"]))
+  lines(tt,p1r_mean,col="red")
+  #for (i in 1:N){
+   # lines(tt,p1rfar$p1r[,i],col="gray")
+  #}
   return(list("matp1r"=p1rfar$p1r,"p1r_mean"=p1r_mean))
 }
 
@@ -1451,7 +1451,7 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   
   list_weighed_matcov_N_t<- array(NA,c(2,2,J))
   
-  list_unweighed_matcov_NB <- matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
+  list_unweighed_matcov_NB <- (1/I) * matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
   
   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   
@@ -1481,10 +1481,10 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
         list_Wji_t <- c(list_Wji_t, KhjKhi)
       }
     }
-    list_weighed_matcov_N_t[1,1,index_t] <- sum(list_Wji_t * Aji) / denom
-    list_weighed_matcov_N_t[1,2,index_t] <- sum(list_Wji_t * Dji) /denom
-    list_weighed_matcov_N_t[2,1,index_t] <- sum(list_Wji_t * Cji) /denom
-    list_weighed_matcov_N_t[2,2,index_t] <- sum(list_Wji_t * Bji) /denom
+    list_weighed_matcov_N_t[1,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Aji) / denom
+    list_weighed_matcov_N_t[1,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Dji) /denom
+    list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Cji) /denom
+    list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Bji) /denom
     
     #list_weighed_matcov_N_t<- c(list_weighed_matcov_N_t,list_weighed_matcov_N_t)
   }
@@ -1513,25 +1513,25 @@ matcovNB <- function(p12_hat_t, p13_hat_t,lambda_t,k_t){
   ##
   ## Requires : matcovNB_aij_t(), matcovNB_bji(), matcovNB_cji()
   
-  A1_ji <- matcovNB_aji(p12_hat_t,p13_hat_t,lambda_t,k_t)
-  B1_ji <- matcovNB_bji(p12_hat_t,p13_hat_t,lambda_t,k_t)
+  A1_ji <- matcovNB_aji(p12_hat_t,lambda_t,k_t)
+  B1_ji <- matcovNB_bji(p13_hat_t,lambda_t,k_t)
   C1_ji <- matcovNB_cji(p12_hat_t,p13_hat_t,lambda_t,k_t)
   
   Ncombinations<-length(A1_ji)
   
   list_unweighed_matcov_NB <- array(NA,c(2,2,Ncombinations))
   
-  list_unweighed_matcov_NB[1,1,] <- A1_ji
-  list_unweighed_matcov_NB[1,2,] <- C1_ji 
-  list_unweighed_matcov_NB[2,1,] <- C1_ji 
-  list_unweighed_matcov_NB[2,2,] <- B1_ji 
+  list_unweighed_matcov_NB[1,1,] <- 2*A1_ji
+  list_unweighed_matcov_NB[1,2,] <- 2*C1_ji 
+  list_unweighed_matcov_NB[2,1,] <- 2*C1_ji 
+  list_unweighed_matcov_NB[2,2,] <- 2*B1_ji 
   
   return (list_unweighed_matcov_NB) 
   }
 
-matcovNB_aji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
+matcovNB_aji <- function(p12_hat_t,lambda_t,k_t){
   
-  ## This fucntion computes the unweighted term Aij of NB_n's asymptotic variance-covariance matrix
+  ## This function computes the unweighted term Aij of NB_n's asymptotic variance-covariance matrix
   ##
   ##    Aij = E( min ( G(Z_tj),G(Z_ti) ) - G(Z_tj )* G(Z_ti) ) =  E ( M_2ji + ( p12_hat.j * p12_hat.i ) )
   ##
@@ -1570,7 +1570,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
-  ##    Cji = E( ( G(Z_tj) * min(G(Z_tj),G(Z_ti)) ) - G(Z_tj)^2 *G(Z_ti) )  =  2* E( E_ji - p13_hat.j  * p12_hat.i )
+  ##    Cji =  E( ( 2* G(Z_tj) * min(G(Z_tj),G(Z_ti)) ) - G(Z_tj)^2 *G(Z_ti) )  =  2* E( E_ji - p13_hat.j  * p12_hat.i )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
@@ -1581,7 +1581,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
   ##
   ## Used in : matcovNB
   ##
-  ## Requires : calculEGzjminGziGzj_partieA1() calculEGzjminGzjGzi_partieB()
+  ## Requires : calculEGzjminGzjGzi_partieA1() calculEGzjminGzjGzi_partieB()
   
   list_unweighed_matcov_NB_cji <- c()
   
@@ -1612,7 +1612,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
   return (list_unweighed_matcov_NB_cji)
 }
 
-matcovNB_bji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
+matcovNB_bji <- function(p13_hat_t,lambda_t,k_t){
 
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
@@ -1631,7 +1631,7 @@ matcovNB_bji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 
   list_unweighed_matcov_NB_bji <- c()
   
-  for (j in 1:length(p12_hat_t)){
+  for (j in 1:length(p13_hat_t)){
     lambda.j <- lambda_t[j]
     k.j <- k_t[j]
     p13_hat.j <- p13_hat_t[j]
@@ -1661,15 +1661,15 @@ funcLaplaceterji <- function(v,m,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),to
   facteur2.i=rep(0,nv)
   for (i in 1:nv){
     facteur2.j[i] = laplaceWeibull( j=m, lambda=lam.j, k=k.j, lowerbnd=(10^-6)*v[i],
-                                    upperbnd= v[i]^(1/a.j), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
+                                    upperbnd= v[i]^(1/a.i), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
   }
   for (i in 1:nv){
     facteur2.i[i] = laplaceWeibull( j=m, lambda=lam.i, k=k.i, lowerbnd=(10^-6)*v[i],
-                                    upperbnd= v[i]^(1/a.i), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
+                                    upperbnd= v[i]^(1/a.j), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
   }
   facteur3.j=v^(1/a.j - 1)
   facteur3.i=v^(1/a.i - 1)
-  return((1/a.j)*facteur1.j*facteur2.j*facteur3.j + (1/a.i)*facteur1.i*facteur2.i*facteur3.i)
+  return((1/a.j)*facteur1.j*facteur2.i*facteur3.j + (1/a.i)*facteur1.i*facteur2.j*facteur3.i)
 }
 
 Mrfuncji <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5)){
@@ -1718,7 +1718,7 @@ funcEGzjminGzjGzi_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^
   facteur2.i=rep(0,nv)
   for (i in 1:nv){
     facteur2.i[i] = laplaceWeibull( j=1, lambda=lam.i, k=k.i, lowerbnd=(10^-6)*v[i],
-                                    upperbnd= v[i]^(1/a.i), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
+                                    upperbnd= v[i]^(1/a.j), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
   }
   facteur3.j=v^(1/a.j - 1)
   return((1/a.j)*facteur1.j*facteur2.i*facteur3.j)
@@ -1794,16 +1794,15 @@ matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t){
   A2_jit <- matcovNA_A2_jit(index_t, p12_hat_t)
   B2_jit <- matcovNA_B2_jit(index_t, p13_hat_t)
   C2_jit <- matcovNA_C2_jit(index_t, p12_hat_t, p13_hat_t)
-  D2_jit <- matcovNA_D2_jit(index_t, p12_hat_t, p13_hat_t)
   
   Ncombiantions<-length(A2_jit)
   
   list_unweighed_NA_t<- array(NA,c(2,2,Ncombiantions))
   
-  list_unweighed_NA_t[1,1,] <- A2_jit
-  list_unweighed_NA_t[1,2,] <- D2_jit
-  list_unweighed_NA_t[2,1,] <- C2_jit
-  list_unweighed_NA_t[2,2,] <- B2_jit
+  list_unweighed_NA_t[1,1,] <- 2*A2_jit
+  list_unweighed_NA_t[1,2,] <- 2*C2_jit
+  list_unweighed_NA_t[2,1,] <- 2*C2_jit
+  list_unweighed_NA_t[2,2,] <- 2*B2_jit
   
   return (list_unweighed_NA_t) 
 }
@@ -1908,50 +1907,12 @@ matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
       p13_hat.i <- p13_hat_t[i]
       p12_hat.i <- p12_hat_t[i]
       
-      NA_cji <- p13_hat.j * p13_hat.i - p12_hat.index *  p13_hat.j - p13_hat.index * p12_hat.i + p13_hat.index * p13_hat.index
+      NA_cji <- p13_hat.j * p13_hat.i - p12_hat.index *  p13_hat.i - p13_hat.index * p12_hat.j + p13_hat.index * p13_hat.index
       
       list_unweighed_matcov_NA_cji <- c(list_unweighed_matcov_NA_cji, NA_cji)
     }
   }
   return (list_unweighed_matcov_NA_cji)
-}
-
-matcovNA_D2_jit <- function(index_t,p12_hat_t,p13_hat_t){
-  
-  ## This fucntion computes the unweighted list C2_ji of NA's variance-covariance matrix
-  ##
-  ##    D2_ji = (p13_hat.i * p12_hat.j) - ( p12_hat.t * p13_hat.i ) -  ( p13_hat.t * p12_hat.j )   + ( p13_hat.t * p12_hat.t )  
-  ##
-  ## Input :
-  ## - index_t : year t for which are calculating the C2_ji terms (each time step t has associated a different vector B2_ji)
-  ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
-  ##
-  ## Output :
-  ## - Vector containing A2_ji terms
-  ##
-  ## Used in : matcovNA_t
-  ##
-  ## Requires : nothing
-  
-  list_unweighed_matcov_NA_dji <- c()
-  
-  p12_hat.index <- p12_hat_t[index_t]
-  p13_hat.index <- p13_hat_t[index_t]
-  
-  for (j in 1:length(p13_hat_t)){
-    p13_hat.j <- p13_hat_t[j]
-    p12_hat.j <- p12_hat_t[j]
-    
-    for (i in 1:j){
-      p13_hat.i <- p13_hat_t[i]
-      p12_hat.i <- p12_hat_t[i]
-      
-      NA_dji <- p13_hat.i * p12_hat.j - p12_hat.index *  p13_hat.i - p13_hat.index * p12_hat.j + p13_hat.index * p12_hat.index
-      
-      list_unweighed_matcov_NA_dji <- c(list_unweighed_matcov_NA_dji, NA_dji)
-    }
-  }
-  return (list_unweighed_matcov_NA_dji)
 }
 
 ###########################   Variance of p1rW_t and  far_t}   ################################
@@ -1996,7 +1957,7 @@ varp1rfar_t <- function(r,matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
     list_variancep1r_t[i] <- Jacovrminus1[[1]]%*%inv(Jacov12[[1]][[i]]) %*% matcovN_t[,,i] %*% inv(t(Jacov12[[1]][[i]])) %*% t(Jacovrminus1[[i]])
     list_variancefar_t[i] <- list_variancep1r_t[i] / (sqrt(J)*r*((p1rW_t$p1r[i])^2))
   }
-  return (list("varp1r_t"=list_variancep1r_t,"varfar_t"=list_variancefar_t))
+  return (list("varp1r_t"=list_variancep1r_t,"varfar_t"=list_variancefar_t,"p1r_t"=p1rW_t$p1r))
 }
 
 ## Auxiliary function
@@ -2017,24 +1978,84 @@ jacobianFunctiongrminus1 <- function(lam.vec,k.vec,r.vec){
 ##################                                                 ############################
 
 # temporary
-CI_p1rfar <- function(r, lambda_t, k_t, matcovN.vec, X.vec, Z.vec, GmZ,tt,t_eval,h){
+CI_p1rfar <- function(p1r.vec,varp1r.vec,r,t_eval,J,alpha=0.5){
   
-  J<-length(Z.vec)
+  stdp1rW <- sqrt(varp1r.vec)
+  zalpha <- qnorm(1-alpha/2)
+  lowerbndp1r_t <- p1r.vec*exp(-(zalpha*stdp1rW)/sqrt(J*p1r.vec^2))
+  upperbndp1r_t <- p1r.vec*exp(+(zalpha*stdp1rW)/sqrt(J*p1r.vec^2))
   
-  p1rfar <- p1rfarW_temps(rep(r,J),lambda_t,k_t)
-  p1rW_t <- p1rfar$p1r
-  farW_t <- p1rfar$far
+  plot(t_eval,upperbndp1r_t, type="l",col="gray")
+  lines(t_eval,p1r.vec, col="darkgreen")
+  lines(t_eval,lowerbndp1r_t,col="gray")
   
-  varp1rfar <- varp1rfar_t(r,matcovN.vec, X.vec, Z.vec, GmZ,tt,t_eval,h, p1rW_t)
+  return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t))
+}
+
+# General fonction
+calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
   
-  stdp1rW_t <- sqrt(varp1rfar$varp1r_t)
-  stdfarW_t <- sqrt(varp1rfar$varfar_t)
-  zalpha <- qnorm(0.975)
+  J <- length(Z.vec)
+  I <- length(X.vec)
   
-  lowerbndp1r_t <- p1rW_t * exp(-(zalpha*stdp1rW_t)/sqrt(J*p1rW_t^2))
-  upperbndp1r_t <- p1rW_t * exp(+(zalpha*stdp1rW_t)/sqrt(J*p1rW_t^2))
-  lowerbndfar_t <- farW_t - zalpha*stdfarW_t/sqrt(J)
-  upperbndfar_t <- farW_t + zalpha*stdfarW_t/sqrt(J)
+  G_emp <- ecdf(X.vec)
+  GmZ <- G_emp(Z.vec)
   
-  return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"lowfar_t"=lowerbndfar_t,"upper" ))
+  theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
+  lambda_t <- theta_t[[1]]
+  k_t <- theta_t[[2]]
+  
+  p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
+  p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
+  
+  list_weighed_matcov_N_t<- array(NA,c(2,2,J))
+  
+  list_unweighed_matcov_NB <- (1/I) * matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
+  
+  Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
+  
+  for (index_t in 1:J){
+    
+    list_unweighed_matcov_NA_t<-matcovNA_t(index_t, p12_hat.vec, p13_hat.vec)
+    
+    list_unweighed_matcov_N_t<- list_unweighed_matcov_NB + list_unweighed_matcov_NA_t
+    
+    Aji <- list_unweighed_matcov_N_t[1,1,]
+    Bji <- list_unweighed_matcov_N_t[2,2,]
+    Dji <- list_unweighed_matcov_N_t[1,2,]
+    Cji <- list_unweighed_matcov_N_t[2,1,]
+    
+    denom<-(sum(Kh[index_t,]))^2
+    
+    list_Wji_t <- c()
+    
+    for (j in 1:dim(Kh)[2]){
+      Khj<-Kh[index_t,j]
+      
+      for (i in 1:j){
+        Khi <- Kh[index_t,i]
+        
+        KhjKhi <- Khj * Khi
+        
+        list_Wji_t <- c(list_Wji_t, KhjKhi)
+      }
+    }
+    list_weighed_matcov_N_t[1,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Aji) / denom
+    list_weighed_matcov_N_t[1,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Dji) /denom
+    list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Cji) /denom
+    list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Bji) /denom
+  }
+  matcov_p1rfar<-varp1rfar_t(r,list_weighed_matcov_N_t, X, Z, GmZ,tt,t_eval,h)
+  p1r<-matcov_p1rfar$p1r_t
+  stdp1rW <- sqrt(matcov_p1rfar$varp1r_t)
+  zalpha <- qnorm(1-alpha/2)
+  lowerbndp1r_t <- p1r*exp(-(zalpha*stdp1rW)/sqrt(J*p1r^2))
+  upperbndp1r_t <-p1r*exp(+(zalpha*stdp1rW)/sqrt(J*p1r^2))
+  
+  
+  plot(tt,upperbndp1r_t, type="l")
+  lines(tt,lowerbndp1r_t, type="l")
+  lines(tt,p1r,col="blue")
+  
+  return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"p1r_t"=p1r))
 }
