@@ -1485,8 +1485,7 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
     list_weighed_matcov_N_t[1,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Dji) /denom
     list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Cji) /denom
     list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Bji) /denom
-    
-    #list_weighed_matcov_N_t<- c(list_weighed_matcov_N_t,list_weighed_matcov_N_t)
+    cat("time", index_t, "weighed","\n")
   }
   return(list_weighed_matcov_N_t)
 }
@@ -1546,14 +1545,18 @@ matcovNB_aji <- function(p12_hat_t,lambda_t,k_t){
   ##
   ## Requires : Mrfuncji()
   
+  cat("start: computation of A1ji","\n")
+  
   list_unweighed_matcov_NB_aji <- c()
   
   for (j in 1:length(p12_hat_t)){
+    cat("start: components for j= ",j,"\n")
     lambda.j <- lambda_t[j]
     k.j <- k_t[j]
     p12_hat.j <- p12_hat_t[j]
     
     for (i in 1:j){
+      cat("start: components for i= ",i,"\n")
       lambda.i <- lambda_t[i]
       k.i <- k_t[i]
       p12_hat.i <- p12_hat_t[i]
@@ -1561,6 +1564,7 @@ matcovNB_aji <- function(p12_hat_t,lambda_t,k_t){
       matcov_NB_aji <-Mrfuncji(2,lambda.j,k.j,lambda.i,k.i) - p12_hat.j * p12_hat.i
       
       list_unweighed_matcov_NB_aji <- c(list_unweighed_matcov_NB_aji, matcov_NB_aji)
+      cat("done: unweighed list of components for ",j,", ",i,"\n")
     }
   }
   return (list_unweighed_matcov_NB_aji)
@@ -1583,9 +1587,12 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
   ##
   ## Requires : calculEGzjminGzjGzi_partieA1() calculEGzjminGzjGzi_partieB()
   
+  cat("start: computation of C1ji","\n")
+  
   list_unweighed_matcov_NB_cji <- c()
   
   for (j in 1:length(p12_hat_t)){
+    cat("start: components for j= ",j,"\n")
     lambda.j <- lambda_t[j]
     k.j <- k_t[j]
     p12_hat.j <- p12_hat_t[j]
@@ -1594,6 +1601,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
     EGzjminGzjGzi_partieA1 <-calculEGzjminGziGzj_partieA1(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
   
     for (i in 1:j){
+      cat("start: components for i= ",i,"\n")
       lambda.i <- lambda_t[i]
       k.i <- k_t[i]
       p12_hat.i <- p12_hat_t[i]
@@ -1607,6 +1615,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       matcov_NB_cji <- 2*(EGzjminGzjGzi + (p13_hat.j * p12_hat.i))
     
       list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
+      cat("done: unweighed list of components for ",j,", ",i,"\n")
     }
   }
   return (list_unweighed_matcov_NB_cji)
@@ -1628,15 +1637,19 @@ matcovNB_bji <- function(p13_hat_t,lambda_t,k_t){
   ## Used in : matcovNB
   ##
   ## Requires : Mrfuncji()
-
+  
+  cat("start: computation of B1ji","\n")
+  
   list_unweighed_matcov_NB_bji <- c()
   
   for (j in 1:length(p13_hat_t)){
+    cat("start: components for j= ",j,"\n")
     lambda.j <- lambda_t[j]
     k.j <- k_t[j]
     p13_hat.j <- p13_hat_t[j]
     
     for (i in 1:j){
+      cat("start: components for i= ",i,"\n")
       lambda.i <- lambda_t[i]
       k.i <- k_t[i]
       p13_hat.i <- p13_hat_t[i]
@@ -1644,6 +1657,7 @@ matcovNB_bji <- function(p13_hat_t,lambda_t,k_t){
       NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
       
       list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
+      cat("done: unweighed list for j= ", j," i= ",i,"\n")
     }
   }
   return (list_unweighed_matcov_NB_bji)
@@ -1791,6 +1805,8 @@ matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t){
   ##
   ## Requires : matcovNA_A2_jit(), matcovNA_B2_jit(), matcovNA_C2_jit()
   
+  cat("start: computation of matcov NA","\n")
+  
   A2_jit <- matcovNA_A2_jit(index_t, p12_hat_t)
   B2_jit <- matcovNA_B2_jit(index_t, p13_hat_t)
   C2_jit <- matcovNA_C2_jit(index_t, p12_hat_t, p13_hat_t)
@@ -1824,11 +1840,14 @@ matcovNA_A2_jit <- function(index_t, p12_hat_t){
   ##
   ## Requires : nothing
   
+  cat("start: computation of A2ji","\n")
+  
   list_unweighed_matcov_NA_aji <- c()
   
   p12_hat.index <- p12_hat_t[index_t]
   
   for (j in 1:length(p12_hat_t)){
+    
     p12_hat.j <- p12_hat_t[j]
     
     for (i in 1:j){
@@ -1858,6 +1877,8 @@ matcovNA_B2_jit <- function(index_t,p13_hat_t){
   ## Used in : matcovNA_t
   ##
   ## Requires : nothing
+  
+  cat("start: computation of B2ji","\n")
   
   list_unweighed_matcov_NA_bji <- c()
   
@@ -1893,6 +1914,8 @@ matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
   ## Used in : matcovNA_t
   ##
   ## Requires : nothing
+  
+  cat("start: computation of C2ji","\n")
   
   list_unweighed_matcov_NA_cji <- c()
   
@@ -1994,6 +2017,25 @@ CI_p1rfar <- function(p1r.vec,varp1r.vec,r,t_eval,J,alpha=0.5){
 
 # General fonction
 calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
+
+  ## This fucntion computes the upper and lower confidence bounds for p1r
+  ##
+  ## Input :
+  ## - record size r (numeric value)
+  ## - counterfactual and factual X.vec and Z.vec (both vectors)
+  ## - tt vector containing times steps of Z (vector of the same length of Z.vec)
+  ## - t_val , vector of evaluation times
+  ## - h: bad+ndwith (numeric value)
+  ## - alpha: confidence level (numeric value)
+  ##
+  ## Output :
+  ## - 3 vectors: upper bound, lower bound, p1rt
+  ## - 2 plots: the first show us the 3 vectors for a y scale allowing us to differenciate them
+  ##            the sencond one has an y scale that allows us to compare p1r to 1/r
+  ##
+  ## Requires : weibullGMM_NonStationaire(), matcovNB(), matcovNA_t(), varp1rfar_t(), 
+  ##
+  ## REMARK: WHEN CHANGING r, WE MUST CHANGE LABELS OF AXIS AND TITLE TO THE CORRECT r
   
   J <- length(Z.vec)
   I <- length(X.vec)
@@ -2001,24 +2043,30 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
   G_emp <- ecdf(X.vec)
   GmZ <- G_emp(Z.vec)
   
+  cat("start: computation of theta","\n")
   theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lambda_t <- theta_t[[1]]
   k_t <- theta_t[[2]]
+  cat("end: computation of theta","\n")
   
   p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
   p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
   
   list_weighed_matcov_N_t<- array(NA,c(2,2,J))
   
+  cat("start: computation of unweighted matcovNB","\n")
   list_unweighed_matcov_NB <- (1/I) * matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
+  cat("end: computation of matcovNB","\n")
   
   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   
   for (index_t in 1:J){
-    
+    cat("start: computation of unweighted matcovNA for t=" ,index_t,"\n")
     list_unweighed_matcov_NA_t<-matcovNA_t(index_t, p12_hat.vec, p13_hat.vec)
     
     list_unweighed_matcov_N_t<- list_unweighed_matcov_NB + list_unweighed_matcov_NA_t
+    
+    cat("end: unweighed matcov computed for t= ",index_t,"\n")
     
     Aji <- list_unweighed_matcov_N_t[1,1,]
     Bji <- list_unweighed_matcov_N_t[2,2,]
@@ -2028,7 +2076,7 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
     denom<-(sum(Kh[index_t,]))^2
     
     list_Wji_t <- c()
-    
+    cat("start: weighting matcovN","\n")
     for (j in 1:dim(Kh)[2]){
       Khj<-Kh[index_t,j]
       
@@ -2044,18 +2092,31 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
     list_weighed_matcov_N_t[1,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Dji) /denom
     list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Cji) /denom
     list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Bji) /denom
+    cat("end: weighting matcovN ","\n")
   }
+  cat("start: CI computation","\n")
   matcov_p1rfar<-varp1rfar_t(r,list_weighed_matcov_N_t, X.vec, Z.vec, GmZ,tt,t_eval,h)
   p1r<-matcov_p1rfar$p1r_t
   stdp1rW <- sqrt(matcov_p1rfar$varp1r_t)
   zalpha <- qnorm(1-alpha/2)
   lowerbndp1r_t <- p1r*exp(-(zalpha*stdp1rW)/sqrt(J*p1r^2))
   upperbndp1r_t <-p1r*exp(+(zalpha*stdp1rW)/sqrt(J*p1r^2))
+  cat("end: CI computation","\n")
   
+  #PLOT 1
+  cat("start: plot1","\n")
+  plot(t_eval,upperbndp1r_t, type="l",col="gray",xlab="time",ylab=expression(p["1,10,t"]),
+       main=expression(Evolution ~  over  ~ time  ~ of ~ p["1,10"]))
+  lines(t_eval,lowerbndp1r_t,col="gray")
+  lines(t_eval,p1r,col="blue")
   
-  plot(tt,upperbndp1r_t, type="l")
-  lines(tt,lowerbndp1r_t, type="l")
-  lines(tt,p1r,col="blue")
+  # PLOT 2
+  cat("start: plot2","\n")
+  plot(t_eval,lowerbndp1r_t, type="l",ylim=c((1/r)-0.1,1),xlab="time",ylab=expression(p["1,10,t"]),
+       main=expression(Evolution ~  over  ~ time  ~ of ~ p["1,10"]))
+  lines(t_eval,lowerbndp1r_t)
+  lines(t_eval,p1r,col="blue")
+  lines(t_eval,rep(1/r,J),col="red")
   
   return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"p1r_t"=p1r))
 }
