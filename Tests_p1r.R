@@ -892,7 +892,7 @@ lines(tt,param2$lambdahat,col="red")
 #### Testing functions that compute the confidence interval of p1rt                         ####
 ################################################################################################
 
-# We will forst need to have a X,Z an tt
+# We will first need to have a X,Z an tt
 
 
 ## Function calcul_ICp1r does everything and and show plot p1rt and its lower and upper bound
@@ -916,7 +916,67 @@ matcov_p1rfar$varp1r_t
 # Confodence intervals of p1r (and plot)
 confinterl_test1<-CI_p1rfar(matcov_p1rfar$p1r_t,matcov_p1rfar$varp1r_t,r=7,J=length(Z),tt,alpha=0.5)
 
+################################################################################################
+#### Command line for getting data from tmax cmip6 datastes and saving it                                ####
+################################################################################################
+
+tmax_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/tmax_cmip6_yearmax.rds")
+library(dplyr)
+
+# England - point:2052	lon:-2.5	lat:52.5 / France - point: 1891 lon:2.5 	lat:47.5
+# Argentine : point:815	lon:-67.5	lat: -32.5 / Zimbawe - point: 1051	lon: 32.5	lat: -17.5
+# Oceane pacifique - point: 1295 lon: 172.5	lat:-2.5 / Groenland - point:2404	lon:-42.5	lat:77.5
+# Antarctique - point:94	lon:-72.5	lat:-82.5 / Russie sud - point:2071	lon:92.5	lat:52.5
+# Australie dessert central - point: 999	lon:132.5	lat:-22.5
+
+# Factual (20xx-2100)
+tmax_rcp85_BCC_CSM2_MR<- tmax_cmip6_yearmax %>% 
+  select (institute, model, experiment, run, year, "94","815","999", "1051","1295","1891","2052","2071","2404") %>% 
+  filter(experiment == "rcp85" & model == "BCC-CSM2-MR" & run == "r1i1p1f1"& between(year, 2060, 2100))  %>%
+  arrange(year) %>% select("94","815","999", "1051","1295","1891","2052","2071","2404")
+tmax_rcp85_BCC_CSM2_MR<-as.data.frame(tmax_rcp85_BCC_CSM2_MR)
+#saveRDS(tmax_rcp85_BCC_CSM2_MR, file="tmax_rcp85_BCC_CSM2_MR.rds")
+#df<- readRDS("tmax_rcp85_BCC_CSM2_MR.rds")
+
+#Historical(1850-2014)
+tmax_historical_BCC_CSM2_MR<- tmax_cmip6_yearmax %>% 
+  select (institute, model, experiment, run, year, "94","815","999", "1051","1295","1891","2052","2071","2404") %>% 
+  filter(experiment == "historical" & model == "BCC-CSM2-MR"& run == "r1i1p1f1")  %>% 
+  arrange(year) %>% select("94","815","999", "1051","1295","1891","2052","2071","2404")
+tmax_historical_BCC_CSM2_MR<-as.data.frame(tmax_historical_BCC_CSM2_MR)
+
+# Historical + Factual (1850-2014 + 2015-2100)
+tmax_historicalrecp85_CSM2_MR<- bind_rows(tmax_historical_BCC_CSM2_MR, tmax_rcp85_BCC_CSM2_MR)
+#saveRDS(tmax_historicalrcp85_BCC_CSM2_MR, file="tmax_historicalrcp85_BCC_CSM2_MR.rds")
+#df<- readRDS("tmax_rcp85_BCC_CSM2_MR.rds")
 
 
+# Contrefactuel (1850-2020)
+tmax_historicalNat_BCC_CSM2_MR<- tmax_cmip6_yearmax %>% 
+  select (institute, model, experiment, run, year, "94","815","999", "1051","1295","1891","2052","2071","2404") %>% 
+  filter(experiment == "historicalNat" & model == "BCC-CSM2-MR"& run == "r1i1p1f1")  %>% 
+  arrange(year) %>% select("94","815","999", "1051","1295","1891","2052","2071","2404")
+tmax_historicalNat_BCC_CSM2_MR<-as.data.frame(tmax_historicalNat_BCC_CSM2_MR)
+#saveRDS(tmax_historicalNat_BCC_CSM2_MR, file="tmax_historicalNat_BCC_CSM2_MR.rds")
+#df2<- readRDS("tmax_historicalNat_BCC_CSM2_MR.rds")
 
+################################################################################################
+#### Simple test with real data                                                             ####
+################################################################################################
 
+# Factual (2040-2100) point 2404
+Z<- tmax_cmip6_yearmax %>% 
+  select (institute, model, experiment, run, year,"2404") %>% 
+  filter(experiment == "rcp85" & model == "BCC-CSM2-MR" & run == "r1i1p1f1"& between(year, 2040, 2100))  %>%
+  rename(temp=6) %>% arrange(year) %>% select(temp)
+Z<-as.vector(Z[[1]])
+# counterfactual
+X<- tmax_cmip6_yearmax %>% 
+  select (institute, model, experiment, run, year, "2404") %>% 
+  filter(experiment == "historicalNat" & model == "BCC-CSM2-MR"& run == "r1i1p1f1")  %>% 
+  rename(temp=6) %>% arrange(year) %>% select(temp)
+X<-as.vector(X[[1]])
+
+tt<-c(1:length(Z))
+
+plotp1r<-calcul_ICp1r(r=10,X,Z ,tt,tt,h=20,alpha=0.5)
