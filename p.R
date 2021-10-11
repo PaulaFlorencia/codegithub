@@ -25,7 +25,7 @@ Kern_gauss <- function(x)exp(-x^2/2)
 
 #### p12_t Non parametric computation ##############################################################
 
-p12_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
+p12_NonPar <- function(X.mat,Z.mat,tt,t_eval,h,kern= dEpan){
   
   ## Computation of p12_t using kernels   
   ##
@@ -46,16 +46,25 @@ p12_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
   ##
   ## Requires : dEpan (or Kern_gauss)
   
-  G_emp <- ecdf(X)
-  G_Z <- G_emp(Z)
+  X.mat <- as.matrix(X.mat)
+  Z.mat <- as.matrix(Z.mat)
+  
+  GmZ.mat <- matGZ_func(X.mat,Z.mat)
+  N <- dim(GmZ.mat)[2]
+  J <- dim(GmZ.mat)[1]
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  p12_hat <- W %*% G_Z
+  p12.mat <- matrix(NA, ncol = N, nrow = J)
+  for(i in 1:N){
+    GZ_2<-GmZ.mat[,i]
+    p12.mat[,i] <- W %*% GZ_2
+  }
+  return( list("p12.mat"=p12.mat,"GmZ.mat"=GmZ.mat) ) 
 }
 
 #### p13_t and p1r_t Non parametric computation ##############################################################
 
-p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
+p13_NonPar <- function(X.mat,Z.mat,tt,t_eval,h,kern= dEpan){
 
   ## Computation of p12_t using kernels   
   ##
@@ -76,14 +85,23 @@ p13_NonPar <- function(X,Z,tt,t_eval,h,kern= dEpan){
   ##
   ## Requires : dEpan (or Kern_gauss)
   
-  G_emp_carre <- ecdf(X)
-  G_Z_carre <- (G_emp_carre(Z))^2
+  X.mat <- as.matrix(X.mat)
+  Z.mat <- as.matrix(Z.mat)
+  
+  GmZ.mat <- matGZ_func(X.mat,Z.mat)
+  N <- dim(GmZ.mat)[2]
+  J <- dim(GmZ.mat)[1]
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  p13_hat <- W %*% G_Z_carre
+  p13.mat <- matrix(NA, ncol = N, nrow = J)
+  for(i in 1:N){
+    GZ_2<-(GmZ.mat[,i])^2
+    p13.mat[,i] <- W %*% GZ_2
+  }
+  return(p13.mat)
 }
 
-p1r_NonPar <- function(X,Z,r,tt,t_eval,h,kern= dEpan){
+p1r_NonPar <- function(X.mat,Z.mat,r.vec,tt,t_eval,h,kern= dEpan){
   
   ## Computation of p12_t using kernels   
   ##
@@ -104,11 +122,21 @@ p1r_NonPar <- function(X,Z,r,tt,t_eval,h,kern= dEpan){
   ##
   ## Requires : dEpan (or Kern_gauss)  
 
-  G_emp_carre <- ecdf(X)
-  G_Z_r <- (G_emp_carre(Z))^(r-1)
+  X.mat <- as.matrix(X.mat)
+  Z.mat <- as.matrix(Z.mat)
+  r.vec<-as.vector(r.vec)
+  
+  GmZ.mat <- matGZ_func(X.mat,Z.mat)
+  N <- dim(GmZ.mat)[2]
+  J <- dim(GmZ.mat)[1]
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  p13_hat <- W %*% G_Z_r
+  p1r.mat <- matrix(NA, ncol = N, nrow = J)
+  for(i in 1:N){
+    GZ_2<-(GmZ.mat[,i])^(r.vec[i]-1)
+    p1r.mat[,i] <- W %*% GZ_2
+  }
+  return(p1r.mat)
 }
 
 #### Others fonctions ###############3########################################################################
@@ -240,7 +268,7 @@ CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
 #### General fonction #############################################################################
 
 # Estimate p12_t and p13_t for each trajectory {(X)_t,(Z)_t}
-P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
+P12_P13_estimation <- function(X.mat,Z.mat,tt,t_eval,h,kern=dEpan){
   
   ## This routine computes both \hat{p}12_t and  \hat{p}13_t 
   ##
@@ -258,23 +286,17 @@ P12_P13_estimation <- function(matX,matZ,tt,t_eval,h,kern=dEpan){
   ##
   ## Requires : p12_Nonpar, p13_NonPar 
   
-  matX <- as.matrix(matX)
-  matZ <- as.matrix(matZ) 
-  dimnsZ=dim(matZ)
-  matp12 <- matrix(rep(0,prod(dimnsZ)),nrow=dimnsZ[1],ncol=dimnsZ[2])
-  matp13 <- matrix(rep(0,prod(dimnsZ)),nrow=dimnsZ[1],ncol=dimnsZ[2])
-  
+  X.mat <- as.matrix(X.mat)
+  Z.mat <- as.matrix(Z.mat) 
+  dimnsZ=dim(Z.mat)
+
   if (dimnsZ[1]!=length(tt)){
     stop("Z trajectory and tt must have the same length")
   }
-  
-  for (j in 1:dimnsZ[2]){
-    X <- matX[,j]
-    Z <- matZ[,j]
-    matp12[,j] <- p12_NonPar(X,Z,tt,t_eval,h,kern)
-    matp13[,j] <- p13_NonPar(X,Z,tt,t_eval,h,kern)
-  }
-  return(list("matp12"=matp12,"matp13"=matp13))
+  p12.mat<-p12_NonPar(X.mat,Z.mat,tt,tt,h)$p12.mat
+  GmZ.mat<-p12_NonPar(X.mat,Z.mat,tt,tt,h)$GmZ.mat
+  p13.mat<-p13_NonPar(X.mat,Z.mat,tt,tt,h)
+  return(list("matp12"=p12.mat,"matp13"=p13.mat,"matGmZ"=GmZ.mat))
 }
 
 ################################################################################################
@@ -1415,7 +1437,7 @@ plotd_time <- function(size,mux,muz,sigx,sigz){
 
 #### VarCovar matrix ###########################################################################
 
-matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
+matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,r,h){
   
   ## This routine computes the variance-covariance matrix of  
   ##
@@ -1452,27 +1474,32 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   list_weighed_matcov_N_t<- array(NA,c(2,2,J))
   
   list_unweighed_matcov_NB <- (1/I) * matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
+  list_unweighed_matcov_NA_t<-matcovNA_t(p12_hat.vec, p13_hat.vec,lambda_t,k_t,J)
+
+  A1ji <- list_unweighed_matcov_NB[1,1,]
+  B1ji <- list_unweighed_matcov_NB[2,2,]
+  D1ji <- list_unweighed_matcov_NB[1,2,]
+  C1ji <- list_unweighed_matcov_NB[2,1,]
+  
+  A2ji <- list_unweighed_matcov_NA_t[1,1,]
+  B2ji <- list_unweighed_matcov_NA_t[2,2,]
+  D2ji <- list_unweighed_matcov_NA_t[1,2,]
+  C2ji <- list_unweighed_matcov_NA_t[2,1,]
   
   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   
   for (index_t in 1:J){
     
-    list_unweighed_matcov_NA_t<-matcovNA_t(index_t, p12_hat.vec, p13_hat.vec)
-    
-    list_unweighed_matcov_N_t<- list_unweighed_matcov_NB + list_unweighed_matcov_NA_t
-    
-    Aji <- list_unweighed_matcov_N_t[1,1,]
-    Bji <- list_unweighed_matcov_N_t[2,2,]
-    Dji <- list_unweighed_matcov_N_t[1,2,]
-    Cji <- list_unweighed_matcov_N_t[2,1,]
-    
     denom<-(sum(Kh[index_t,]))^2
     
     list_Wji_t <- c()
+    list_khj_t<-c()
     
     for (j in 1:dim(Kh)[2]){
       Khj<-Kh[index_t,j]
       
+      list_khj_t <- c(list_khj_t, Khj^2)
+ 
       for (i in 1:j){
         Khi <- Kh[index_t,i]
         
@@ -1481,10 +1508,10 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
         list_Wji_t <- c(list_Wji_t, KhjKhi)
       }
     }
-    list_weighed_matcov_N_t[1,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Aji) / denom
-    list_weighed_matcov_N_t[1,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Dji) /denom
-    list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *sum(list_Wji_t * Cji) /denom
-    list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *sum(list_Wji_t * Bji) /denom
+    list_weighed_matcov_N_t[1,1,index_t] <- 1/(J^2) *( sum(list_Wji_t * A1ji) + sum(list_khj_t*A2ji)) / denom
+    list_weighed_matcov_N_t[1,2,index_t] <- 1/(J^2) *( sum(list_Wji_t * D1ji) + sum(list_khj_t*D2ji) ) /denom
+    list_weighed_matcov_N_t[2,1,index_t] <- 1/(J^2) *( sum(list_Wji_t * C1ji) + sum(list_khj_t*C2ji) ) /denom
+    list_weighed_matcov_N_t[2,2,index_t] <- 1/(J^2) *( sum(list_Wji_t * B1ji) + sum(list_khj_t*B2ji)) /denom
     cat("time", index_t, "weighed","\n")
   }
   return(list_weighed_matcov_N_t)
@@ -1788,7 +1815,7 @@ foncpartiedeA1EGjminGjGi <- function(x,lam,k,a){
 
 ##### varcovarNA_t #############################################################################
 
-matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t){
+matcovNA_t <- function(p12_hat_t, p13_hat_t,lambda_t,k_t,J){
   
   ## For a given time step t ,this routine computes the unweighed variance-covariance matrix of NA
   ##
@@ -1807,27 +1834,31 @@ matcovNA_t <- function(index_t, p12_hat_t, p13_hat_t){
   
   cat("start: computation of matcov NA","\n")
   
-  A2_jit <- matcovNA_A2_jit(index_t, p12_hat_t)
-  B2_jit <- matcovNA_B2_jit(index_t, p13_hat_t)
-  C2_jit <- matcovNA_C2_jit(index_t, p12_hat_t, p13_hat_t)
+  p1rfar_r4 <- p1rfarW_temps(lambda_t,k_t,matrix(4,ncol=1,nrow=J)) 
+  p14W_t <- p1rfar_r4$p1r
   
-  Ncombiantions<-length(A2_jit)
+  p1rfar_r5 <- p1rfarW_temps(lambda_t,k_t,matrix(4,ncol=1,nrow=J)) 
+  p15W_t <- p1rfar_r5$p1r
   
-  list_unweighed_NA_t<- array(NA,c(2,2,Ncombiantions))
+  A2_jit <- matcovNA_A2_jit(p12_hat_t, p13_hat_t)
+  B2_jit <- matcovNA_B2_jit(p13_hat_t, p15W_t)
+  C2_jit <- matcovNA_C2_jit(p12_hat_t, p13_hat_t,p14W_t)
+
+  list_unweighed_NA_t<- array(NA,c(2,2,length(p12_hat_t)))
   
-  list_unweighed_NA_t[1,1,] <- 2*A2_jit
-  list_unweighed_NA_t[1,2,] <- 2*C2_jit
-  list_unweighed_NA_t[2,1,] <- 2*C2_jit
-  list_unweighed_NA_t[2,2,] <- 2*B2_jit
+  list_unweighed_NA_t[1,1,] <- A2_jit
+  list_unweighed_NA_t[1,2,] <- C2_jit
+  list_unweighed_NA_t[2,1,] <- C2_jit
+  list_unweighed_NA_t[2,2,] <- B2_jit
   
   return (list_unweighed_NA_t) 
 }
 
-matcovNA_A2_jit <- function(index_t, p12_hat_t){
-  
+matcovNA_A2_jit <- function(p12_hat_t,p13_hat_t){
+
   ## This fucntion computes the unweighted list A_2ij of NA's variance-covariance matrix
   ##
-  ##    A2_ji = (p12_hat.j * p12_hat.i) - ( p12_hat.t * (p12_hat.j + p12_hat.i) ) + (p12_hat.t)^2
+  ##    A2_ji = p13_hat.ti-(p12_hat.ti)^2
   ##
   ## Input :
   ## - index_t : year t for which are calculating the A2_ji terms (each time step t has associated a different vector A2_ji)
@@ -1844,28 +1875,21 @@ matcovNA_A2_jit <- function(index_t, p12_hat_t){
   
   list_unweighed_matcov_NA_aji <- c()
   
-  p12_hat.index <- p12_hat_t[index_t]
-  
-  for (j in 1:length(p12_hat_t)){
-    
-    p12_hat.j <- p12_hat_t[j]
-    
-    for (i in 1:j){
-      p12_hat.i <- p12_hat_t[i]
-      
-      NA_aji <- p12_hat.j * p12_hat.i - p12_hat.index * ( p12_hat.j + p12_hat.i) + (p12_hat.index)^2
-      list_unweighed_matcov_NA_aji <- c(list_unweighed_matcov_NA_aji, NA_aji)
-    }
+  for (i in 1:length(p12_hat_t)){
+    p12_hat.i <- p12_hat_t[i]
+    p13_hat.i <- p13_hat_t[i]
+    NA_aji <- p13_hat.i - (p12_hat.i)^2
+    list_unweighed_matcov_NA_aji <- c(list_unweighed_matcov_NA_aji, NA_aji)
   }
   return (list_unweighed_matcov_NA_aji)
 }
 
 
-matcovNA_B2_jit <- function(index_t,p13_hat_t){
-  
+matcovNA_B2_jit <- function(p13_hat_t,p15W_t){
+
   ## This fucntion computes the unweighted list B2_ij of NA's variance-covariance matrix
   ##
-  ##    B2_ji = (p13_hat.j * p13_hat.i) - ( p13_hat.t * (p13_hat.j + p13_hat.i) ) + (p13_hat.t)^2
+  ##    B2_ji = p135W.ti - (p13_hat.ti)^2
   ##
   ## Input :
   ## - index_t : year t for which are calculating the A2_ji terms (each time step t has associated a different vector B2_ji)
@@ -1882,27 +1906,22 @@ matcovNA_B2_jit <- function(index_t,p13_hat_t){
   
   list_unweighed_matcov_NA_bji <- c()
   
-  p13_hat.index <- p13_hat_t[index_t]
-  
-  for (j in 1:length(p13_hat_t)){
-    p13_hat.j <- p13_hat_t[j]
+  for (i in 1:length(p13_hat_t)){
+    p13_hat.i <- p13_hat_t[i]
+    p15W_t.i <- p15W_t[i]
     
-    for (i in 1:j){
-      p13_hat.i <- p13_hat_t[i]
+    NA_bji <-  p15W_t.i -  (p13_hat.i)^2
       
-      NA_bji <- p13_hat.i * p13_hat.j - p13_hat.index * ( p13_hat.i + p13_hat.j) + (p13_hat.index)^2
-      
-      list_unweighed_matcov_NA_bji <- c(list_unweighed_matcov_NA_bji, NA_bji)
-    }
+    list_unweighed_matcov_NA_bji <- c(list_unweighed_matcov_NA_bji, NA_bji)
   }
   return (list_unweighed_matcov_NA_bji)
 }
 
-matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
-  
+matcovNA_C2_jit <- function(p12_hat_t,p13_hat_t,p14W_t){
+
   ## This fucntion computes the unweighted list C2_ji of NA's variance-covariance matrix
   ##
-  ##    C2_ji = (p13_hat.j * p12_hat.i) - ( p12_hat.t * p13_hat.j ) -  ( p13_hat.t * p12_hat.i )   + ( p13_hat.t * p12_hat.t )  
+  ##    C2_ji = p14W_ti - (p12_hat.ti * p13_hat.ti)
   ##
   ## Input :
   ## - index_t : year t for which are calculating the C2_ji terms (each time step t has associated a different vector B2_ji)
@@ -1919,22 +1938,15 @@ matcovNA_C2_jit <- function(index_t,p12_hat_t,p13_hat_t){
   
   list_unweighed_matcov_NA_cji <- c()
   
-  p12_hat.index <- p12_hat_t[index_t]
-  p13_hat.index <- p13_hat_t[index_t]
-  
-  for (j in 1:length(p13_hat_t)){
-    p13_hat.j <- p13_hat_t[j]
-    p12_hat.j <- p12_hat_t[j]
+  for (i in 1:length(p12_hat_t)){
+    p13_hat.i <- p13_hat_t[i]
+    p12_hat.i <- p12_hat_t[i]
+    p14W_t.i <- p14W_t[i]
     
-    for (i in 1:j){
-      p13_hat.i <- p13_hat_t[i]
-      p12_hat.i <- p12_hat_t[i]
+    NA_cji <- p14W_t.i - (p12_hat.i * p13_hat.i)
       
-      NA_cji <- p13_hat.j * p13_hat.i - p12_hat.index *  p13_hat.i - p13_hat.index * p12_hat.j + p13_hat.index * p13_hat.index
-      
-      list_unweighed_matcov_NA_cji <- c(list_unweighed_matcov_NA_cji, NA_cji)
+    list_unweighed_matcov_NA_cji <- c(list_unweighed_matcov_NA_cji, NA_cji)
     }
-  }
   return (list_unweighed_matcov_NA_cji)
 }
 
@@ -2062,8 +2074,8 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
   
   for (index_t in 1:J){
     cat("start: computation of unweighted matcovNA for t=" ,index_t,"\n")
-    list_unweighed_matcov_NA_t<-matcovNA_t(index_t, p12_hat.vec, p13_hat.vec)
-    
+    list_unweighed_matcov_NA_t<-matcovNA_t(index_t, p12_hat.vec, p13_hat.vec,lambda_t,k_t,J)
+
     list_unweighed_matcov_N_t<- list_unweighed_matcov_NB + list_unweighed_matcov_NA_t
     
     cat("end: unweighed matcov computed for t= ",index_t,"\n")
@@ -2120,3 +2132,262 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
   
   return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"p1r_t"=p1r))
 }
+# KEEP IN LIKE COMMENT UNTIL NB IS DEVELOPED FOR ALL GRIDPOINTS
+# #############  Matcov Na for all points of the map at the same time ###############
+# ### ( Work in progress, not yet implemented as it is not finished for matcovNB)  ##
+# ###################################################################################
+# 
+# matcovNA <- function(Kh.mat,p12.mat,p13.mat,lam.mat,k.mat,J,N){
+#   
+#   # les imputs .mat doivent être des matrices
+#   p12.mat <- as.matrix(p12.mat)
+#   p13.mat <- as.matrix(p13.mat)
+#   lam.mat <- as.matrix(lam.mat)
+#   k.mat <- as.matrix(k.mat)
+#   
+#   p14.mat <- p1rfarW_temps(lam.mat,k.mat,r.mat=matrix(4,J,N))$p1r
+#   p15.mat <- p1rfarW_temps(lam.mat,k.mat,r.mat=matrix(5,J,N))$p1r
+#   
+#   Kh2.mat <- Kh.mat^2
+#   
+#   covNA_A.mat <- matcovNA_A(Kh2.mat,p12.mat,p13.mat,J,N)
+#   covNA_B.mat <- matcovNA_B(Kh2.mat,p13.mat,p15.mat,J,N)
+#   covNA_C.mat <- matcovNA_C(Kh2.mat,p12.mat,p13.mat,p14.mat,J,N)
+#   
+#   matcovNA<-list()
+#   for (gridpoint in 1:N){
+#     array_matcovNA_gridpoint <- array(NA,c(2,2,J))
+#     array_matcovNA_gridpoint[1,1,] <- covNA_A.mat[,gridpoint]
+#     array_matcovNA_gridpoint[2,2,] <- covNA_B.mat[,gridpoint]
+#     array_matcovNA_gridpoint[1,2,] <- covNA_C.mat[,gridpoint]
+#     array_matcovNA_gridpoint[2,1,] <- covNA_C.mat[,gridpoint]
+#     
+#     matcovNA <- c(matcovNA, list(array_matcovNA_gridpoint) )
+#   }
+#   return(matcovNA) # list of -> (#1 num [1:2, 1:2, 1:30]), #2...) 
+# }
+# 
+# matcovNA_A <- function(Kh2.mat,p12.mat,p13.mat,J,N){
+#   covNA_A_map <- matrix(NA,nrow = J, ncol = N)
+#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
+#     p1rmix.vec <- p13.mat[,gridpoint] - p12.mat[,gridpoint]^2
+#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`)# by row
+#     Khp1r.vec <- rowSums(Khp1r.mat) 
+#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
+#     covNA_A_map[,gridpoint]<-Khp1r.vec 
+#   }
+#   return(covNA_A_map) # chaque colonne est associé à une position differente
+# }
+# 
+# matcovNA_B <- function(Kh2.mat,p13.mat,p15.mat,J,N){
+#   covNA_B_map <- matrix(NA,nrow = J, ncol = N)
+#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
+#     p1rmix.vec <- p15.mat[,gridpoint] - p13.mat[,gridpoint]^2
+#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`) # by row
+#     Khp1r.vec <- rowSums(Khp1r.mat) 
+#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
+#     covNA_B_map[,gridpoint]<-Khp1r.vec 
+#   }
+#   return(covNA_B_map) # chaque colonne est associé à une position differente
+# }
+# 
+# matcovNA_C <- function(Kh2.mat,p12.mat,p13.mat,p14.mat,J,N){
+#   covNA_C_map <- matrix(NA,nrow = J, ncol = N)
+#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
+#     p1rmix.vec <- p14.mat[,gridpoint] - p12.mat[,gridpoint] * p13.mat[,gridpoint]
+#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`)
+#     Khp1r.vec <- rowSums(Khp1r.mat) 
+#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
+#     covNA_C_map[,gridpoint]<-Khp1r.vec 
+#   }
+#   return(covNA_C_map) # chaque colonne est associé à une position differente
+# }
+# 
+# #########################  Work in progress for matcov NB #########################
+# ###################################################################################
+# ###################################################################################
+# 
+# matcovp12p13_t <- function(X.mat, Z.mat,tt,t_eval,r.mat,h){
+#   
+#   X.mat <- as.matrix(X.mat)
+#   Z.mat <- as.matrix(Z.mat)
+#   r.mat <- as.matrix(r.mat)
+#   
+#   J <- dim(Z.vec)[1]
+#   N <- dim(Z.vec)[2]
+#   I <- dim(X.vec)[1]
+#   
+#   p12p13 <- P12_P13_estimation(X.mat,Z.mat,tt,t_eval,h,kern=dEpan)
+#   GmZ.mat <- p12p13$matGmZ
+#   p12_hat.vec <- p12p13$matp12
+#   p13_hat.vec <- p12p13$matp13
+#   
+#   
+#   theta.mat <-weibullGMM_NonStationaire (GmZ.mat, tt, t_eval, h, kern=dEpan, truevalues=NULL)
+#   lambda.mat <- theta.mat[[1]]
+#   k.mat <- theta.mat[[2]]
+#   
+#   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
+#   
+#   cov_NA <- matcovNA(Kh, p12_hat.vec, p13_hat.vec, lambda.mat, k.mat, J, N) # output, list of arrays. at each t, var is different
+#   
+#   cov_NB <- (1/I) * matcovNB(Kh,p12_hat.vec, p13_hat.vec,lambda_t,k_t) # add Kh . out out list of matrix. a chaque t, var est le même
+#   # mais olus simple si on crée des arrays aussi 
+#   
+#   cov_N<-list()
+#   for (gridpoint in 1:N){
+#     array_matcovN_gridpoint <- cov_NA[[gridpoint]]+cov_NB[[gridpoint]]
+#     cov_N <- c(cov_N, list(array_matcovN_gridpoint) )# list of arrays
+#   }
+#   return(cov_N)
+# }
+# 
+# #######
+# # matcovNB <- function(Kh.mat,p12.mat,p13.mat,lam.mat,k.mat,J,N)
+# matcovNB <- function(Kh.mat,p12.mat, p13.mat,lam.mat,k.mat,J,N){
+#   
+#   # Calcul "poids"
+#   Wji_t.vec <- list()
+#   for (index_t in 1:dim(Kh)[1]){
+#     denom<-(sum(Kh[index_t,]))^2
+#     Wji_indext <- c()
+#     for (j in 1:dim(Kh)[2]){
+#       Khj<-Kh[index_t,j]
+#       for (i in 1:j){
+#         Khi <- Kh[index_t,i]
+#         KhjKhi <- Khj * Khi
+#         Wji_indext <- c(Wji_indext, KhjKhi)
+#       }
+#     }
+#     Wji_t.vec [[index_t]] <- Wji_indext
+#   }
+#   WjtWit.mat = do.call(cbind, WjtWit)
+#   
+#   covNB_A.mat <- matcovNB_aji(WjtWit.mat, p12.mat, lam.mat, k.mat,J,N)
+#   covNB_B.mat <- matcovNB_bji(WjtWit.mat, p13.mat, lam.mat, k.mat,J,N)
+#   covNB_C.mat <- matcovNB_cji(WjtWit.mat, p12.mat, p13.mat, lam.mat, k.mat,J,N) #matrix where col:dif grid, row=t_evalx
+#   
+#   matcovNB<-list()
+#   for (gridpoint in 1:N){
+#     array_matcovNB_gridpoint <- array(NA,c(2,2,J))
+#     array_matcovNB_gridpoint[1,1,] <- covNB_A.mat[,gridpoint]
+#     array_matcovNB_gridpoint[2,2,] <- covNB_B.mat[,gridpoint]
+#     array_matcovNB_gridpoint[1,2,] <- covNB_C.mat[,gridpoint]
+#     array_matcovNB_gridpoint[2,1,] <- covNB_C.mat[,gridpoint]
+#     
+#     matcovNB <- c(matcovNB, list(array_matcovNB_gridpoint) )
+#   }
+#   return(matcovNB) # list of -> (#1 num [1:2, 1:2, 1:30]), #2...) 
+# }
+# 
+# matcovNB_aji <- function(WjtWit.mat,p12.mat,lam.mat,k.mat,J,N){
+#   cat("start: computation of A1ji","\n")
+#   
+#   #################
+#   ################
+#   covNA_A_map <- matrix(NA,nrow = J, ncol = N)
+#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
+#     p1rmix.vec <- p13.mat[,gridpoint] - p12.mat[,gridpoint]^2
+#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`)# by row
+#     Khp1r.vec <- rowSums(Khp1r.mat) 
+#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
+#     covNA_A_map[,gridpoint]<-Khp1r.vec 
+#   }
+#   return(covNA_A_map) # chaque colonne est associé à une position differente
+#   ################
+#   ##############
+#   covNB_A_map <- matrix(NA,nrow = J, ncol = N)
+#   for (gridpoint in 1:N){ 
+#     for (j in 1:J){
+#       lambda.j <- lambda_t[j]
+#       k.j <- k_t[j]
+#       p12_hat.j <- p12_hat_t[j]
+#     }
+#     ####
+#     for (j in 1:length(p12_hat_t)){
+#       cat("start: components for j= ",j,"\n")
+#       lambda.j <- lambda_t[j]
+#       k.j <- k_t[j]
+#       p12_hat.j <- p12_hat_t[j]
+#       
+#       for (i in 1:j){
+#         cat("start: components for i= ",i,"\n")
+#         lambda.i <- lambda_t[i]
+#         k.i <- k_t[i]
+#         p12_hat.i <- p12_hat_t[i]
+#         
+#         matcov_NB_aji <-Mrfuncji(2,lambda.j,k.j,lambda.i,k.i) - p12_hat.j * p12_hat.i
+#         
+#         list_unweighed_matcov_NB_aji <- c(list_unweighed_matcov_NB_aji, matcov_NB_aji)
+#         cat("done: unweighed list of components for ",j,", ",i,"\n")
+#       }
+#     }
+#     return (list_unweighed_matcov_NB_aji)
+#   }
+#   
+#   matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t,J,N){
+#     
+#     cat("start: computation of C1ji","\n")
+#     
+#     list_unweighed_matcov_NB_cji <- c()
+#     
+#     for (j in 1:length(p12_hat_t)){
+#       cat("start: components for j= ",j,"\n")
+#       lambda.j <- lambda_t[j]
+#       k.j <- k_t[j]
+#       p12_hat.j <- p12_hat_t[j]
+#       p13_hat.j <- p13_hat_t[j]
+#       
+#       EGzjminGzjGzi_partieA1 <-calculEGzjminGziGzj_partieA1(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
+#       
+#       for (i in 1:j){
+#         cat("start: components for i= ",i,"\n")
+#         lambda.i <- lambda_t[i]
+#         k.i <- k_t[i]
+#         p12_hat.i <- p12_hat_t[i]
+#         p13_hat.i <- p13_hat_t[i]
+#         
+#         EGzjminGzjGzi_partieB <- calculEGzjminGzjGzi_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
+#         
+#         # Adding all parts
+#         EGzjminGzjGzi <- EGzjminGzjGzi_partieA1 + p13_hat.j + EGzjminGzjGzi_partieB 
+#         
+#         matcov_NB_cji <- 2*(EGzjminGzjGzi + (p13_hat.j * p12_hat.i))
+#         
+#         list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
+#         cat("done: unweighed list of components for ",j,", ",i,"\n")
+#       }
+#     }
+#     return (list_unweighed_matcov_NB_cji)
+#   }
+#   
+#   matcovNB_bji <- function(p13_hat_t,lambda_t,k_t,J,N){
+#     
+#     
+#     cat("start: computation of B1ji","\n")
+#     
+#     list_unweighed_matcov_NB_bji <- c()
+#     
+#     for (j in 1:length(p13_hat_t)){
+#       cat("start: components for j= ",j,"\n")
+#       lambda.j <- lambda_t[j]
+#       k.j <- k_t[j]
+#       p13_hat.j <- p13_hat_t[j]
+#       
+#       for (i in 1:j){
+#         cat("start: components for i= ",i,"\n")
+#         lambda.i <- lambda_t[i]
+#         k.i <- k_t[i]
+#         p13_hat.i <- p13_hat_t[i]
+#         
+#         NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
+#         
+#         list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
+#         cat("done: unweighed list for j= ", j," i= ",i,"\n")
+#       }
+#     }
+#     return (list_unweighed_matcov_NB_bji)
+#   }
+
+
+
