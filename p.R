@@ -54,7 +54,7 @@ p12_NonPar <- function(X.mat,Z.mat,tt,t_eval,h,kern= dEpan){
   J <- dim(GmZ.mat)[1]
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  p12.mat <- matrix(NA, ncol = N, nrow = J)
+  p12.mat <- matrix(NA, ncol = N, nrow = length(t_eval))
   for(i in 1:N){
     GZ_2<-GmZ.mat[,i]
     p12.mat[,i] <- W %*% GZ_2
@@ -93,7 +93,7 @@ p13_NonPar <- function(X.mat,Z.mat,tt,t_eval,h,kern= dEpan){
   J <- dim(GmZ.mat)[1]
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  p13.mat <- matrix(NA, ncol = N, nrow = J)
+  p13.mat <- matrix(NA, ncol = N, nrow = length(t_eval))
   for(i in 1:N){
     GZ_2<-(GmZ.mat[,i])^2
     p13.mat[,i] <- W %*% GZ_2
@@ -131,7 +131,7 @@ p1r_NonPar <- function(X.mat,Z.mat,r.vec,tt,t_eval,h,kern= dEpan){
   J <- dim(GmZ.mat)[1]
   Kij <- outer(t_eval,tt,function(zz,z) kern((zz - z) / h))
   W <- Kij / rowSums(Kij)
-  p1r.mat <- matrix(NA, ncol = N, nrow = J)
+  p1r.mat <- matrix(NA, ncol = N, nrow = length(t_eval))
   for(i in 1:N){
     GZ_2<-(GmZ.mat[,i])^(r.vec[i]-1)
     p1r.mat[,i] <- W %*% GZ_2
@@ -197,7 +197,7 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
   G_emp <- ecdf(X)
   G_Z <- G_emp(Z)
   
-  p12_hat<-p12_NonPar(X,Z,tt,t_eval,h,kern)
+  p12_hat<-p12_NonPar(X,Z,tt,t_eval,h,kern)$p12.mat
   K22<-integrate(dEpan_2,-1,1)$value
   f_t<-kern_dens(tt,tt,h)
   sigma_GZ <- as.numeric(var(G_Z-p12_hat))
@@ -226,7 +226,7 @@ IC <- function(X,Z,tt,t_eval,h,kern=dEpan) {
 CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
   
   ## This routine uses cross validation to chose the optimal bandwith of the kernel   
-  ## from a set of values.
+  ## from two vectors.
   ##
   ## Input :
   ## - Counterfactual an factual vectors X and Z
@@ -254,14 +254,76 @@ CV_error <- function(X,Z,tt,t_eval,h_seq,kern= dEpan){
     for(i in 1:n){
       tt_test <- tt[i]; Z_test<-Z[i]; GZ_test <-G_Z[i] # validation set
       tt_tr <- tt[-i]; Z_tr<-Z[-i] # training set
-      GZ_predict <-p12_NonPar(X,Z_tr,tt_tr,t_eval,h_using) 
-      CV_err[i]<-(GZ_test - GZ_predict[i])^2
+      GZ_predict <-p12_NonPar(X,Z_tr,tt_tr,t_eval,h_using,kern)$p12.mat 
+      CV_err[i]<-(GZ_test - GZ_predict[i])^2 
     }
     CV_err_h[j]<-(mean(CV_err))^0.5
   }
   h_opt <- h_seq[which(CV_err_h == min(CV_err_h))]
   opt_err <-min(CV_err_h)
   return(list("optimal_bandwith"= h_opt,"optimal_error"= opt_err ,"list_errors"= CV_err_h) )#vector of errors
+}
+
+CVmat_error <- function(matX,matZ,tt,t_eval,mat_h_seq,kern= dEpan){
+  
+  ## Similar to CV_error(), but it allows Z and can be matrix. mat_hseq must be a matrix of the same number 
+  ## of columns as matZ as matX. il allows to compare to find for each column a different optimal bandwith
+  ## from a different set of possible bandwidths
+  ##
+  ## Used in : Optimal_h_cmip()
+  
+  matX <- as.matrix(matX)
+  matZ <- as.matrix(matZ)
+  GmZ.mat <- matGZ_func(matX,matZ)
+  N <- dim(matZ)[2]
+  J <- dim(matZ)[1]
+  hopt.vec = rep(NA,N)
+  opterr.vec = rep(NA,N)
+  for(n in 1:N){
+    G_Z<-GmZ.mat[,n]
+    Z <- matz[,n]
+    X <- matx[,n]
+    h_seq = mat_h_seq[,n]
+    CV_err_h = rep(NA,length(h_seq))
+    for(j in 1:length(h_seq)){
+      h_using = h_seq[j]
+      CV_err=rep(NA,J)
+      for(i in 1:J){
+        tt_test <- tt[i]; Z_test<-Z[i]; GZ_test <-G_Z[i] # validation set
+        tt_tr <- tt[-i]; Z_tr<-Z[-i] # training set
+        GZ_predict <-p12_NonPar(X,Z_tr,tt_tr,t_eval,h_using,kern)$p12.mat 
+        CV_err[i]<-(GZ_test - GZ_predict[i])^2 
+      }
+      CV_err_h[j]<-(mean(CV_err))^0.5
+    }
+    hopt.vec[n] <- h_seq[which(CV_err_h == min(CV_err_h))]
+    opterr.vec[n] <-min(CV_err_h)
+  }
+  return(list("optimal_bandwith"= hopt.vec,"optimal_error"= opterr.vec) )
+}
+
+Optimal_h_cmip<- function(matx,matz,tt,t_eval,kern=dEpan){
+  
+  ## for each columns of our matrix matx and matz, it applies two times the fonction CVmat_error()
+  ## and finds the optimal bandwidth of each column.
+  ##
+  ## Uses : CVmat_error()
+  ##
+  ## Used in :
+  
+  N <- dim(matz)[2]
+  J <- dim(matz)[1]
+  hseq_first <- c(7,10,20,30,40,50,60,70,80,90,100, 110, 120, 130,140,150,160,170,180,190,200)
+  mat_h_first <- cbind(hseq_first,hseq_first)
+  h_opt_first <- CVmat_error(matx,matz,tt,tt,mat_h_first,kern)$optimal_bandwith
+  
+  mat_h <- matrix(numeric(10*J), nrow = 10, ncol = N) # empty matrix
+  for (i in 1:N){
+    h_opt_i <- h_opt_first[i]
+    hseqfinal <- c(h_opt_i-5,h_opt_i-4,h_opt_i-3,h_opt_i-2,h_opt_i-1,h_opt_i,h_opt_i+1,h_opt_i+2,h_opt_i+3,h_opt_i+4)
+    mat_h[,i] <- hseqfinal
+  }
+  testerror <-CVmat_error(matx,matz,tt,tt,mat_h,kern)
 }
 
 
@@ -310,7 +372,7 @@ library(stats4); library(gmm); library(stats); library(np); library(EWGoF)
 funcLaplace <- function(x,m,lam,k,a){ 
   ##  Utilitary function used in the integrate() statement in function 
   ## laplaceWeibull() defined below
-  (1/a) * exp( -(m*lam/a^(1/k))*(-log(x))^(1/k) ) * x^(1/a - 1) 
+  (1/a) * exp( -(m*lam/a^(1/k))*(-log(x))^(1/k) ) * x^(1/a - 1)
 }
 
 laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(-5)){
@@ -381,6 +443,7 @@ jacobianFunctiong12 <- function(lam.vec,k.vec,debugg=FALSE){
     if (debugg){ cat("dg2dlam,")}
     dg2surdk <- dgjoverdkfunc(2,lambda,k)
     if (debugg){ cat("dg2dk\n")}
+    
     listejacobiennes[[i]] <- matrix(c(dg1surdlambda,dg1surdk,dg2surdlambda,dg2surdk),
                                     2,2,byrow=TRUE)
   }
@@ -390,7 +453,7 @@ jacobianFunctiong12 <- function(lam.vec,k.vec,debugg=FALSE){
 foncdgjoverdlambda <- function(u,j,lam,k,a){
   ## Utilitary function used inside dgjoverdlambdafunc() 
   (-j/a^((1/k)+1)) * (-log(u))^(1/k) * exp( -(j*lam/a^(1/k))*(-log(u))^(1/k) ) * u^(1/a - 1) 
-}
+} 
 
 dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=0.5){
   
@@ -411,7 +474,7 @@ dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=0.5){
 foncdgjoverdk <- function(u,j,lam,k,a){
   ## Utilitary function used inside dgjoverdkfunc() 
   (-lam/k^2) * log( (1/a)*(-log(u)) ) * foncdgjoverdlambda(u,j,lam,k,a)
-}
+} 
 
 dgjoverdkfunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=1){
   
@@ -1054,6 +1117,8 @@ p1rfarW_temps<- function(lam.mat,k.mat,r.mat,lowerbnd=10^(-5)){
   ##
   ## Requires : laplaceWeibull() 
   
+  lam.mat<-as.matrix(lam.mat)
+  k.mat<-as.matrix(k.mat)
   n = dim(lam.mat)[1]
   N = dim(lam.mat)[2]
   p1r.mat = matrix(0,n,N)
@@ -1301,7 +1366,7 @@ simulWclass_nonStationnary_general <-function(I,N,ksiX,sigX=1,muX=0,ksiZ=NULL,mu
       for(i in 1:J)
         matZ[i,j] <-rgev(1, loc=muZ[i], scale=sigZ[i], shape=ksiZ[i])}
     
-    lam_t <- ((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX)
+    lam_t <- ((sigZ/ksiZ)/(sigX/ksiX))^(1/ksiX)
     k_t <- ksiX/ksiZ
   }
   
@@ -1437,7 +1502,7 @@ plotd_time <- function(size,mux,muz,sigx,sigz){
 
 #### VarCovar matrix ###########################################################################
 
-matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,r,h){
+matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   
   ## This routine computes the variance-covariance matrix of  
   ##
@@ -1464,12 +1529,16 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,r,h){
   G_emp <- ecdf(X.vec)
   GmZ <- G_emp(Z.vec)
   
+  cat("start lambda_t and k_t computation", "\n")
   theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lambda_t <- theta_t[[1]]
   k_t <- theta_t[[2]]
+  cat("end lambda_t and k_t computation", "\n")
   
-  p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)
+  cat("start p12_hat.vec and p13_hat.vec computation", "\n")
+  p12_hat.vec <- p12_NonPar(X.vec,Z.vec,tt,t_eval,h)$p12.mat
   p13_hat.vec<- p13_NonPar(X.vec,Z.vec,tt,t_eval,h)
+  cat("end p12_hat.vec and p13_hat.vec computation", "\n")
   
   list_weighed_matcov_N_t<- array(NA,c(2,2,J))
   
@@ -1548,8 +1617,8 @@ matcovNB <- function(p12_hat_t, p13_hat_t,lambda_t,k_t){
   list_unweighed_matcov_NB <- array(NA,c(2,2,Ncombinations))
   
   list_unweighed_matcov_NB[1,1,] <- 2*A1_ji
-  list_unweighed_matcov_NB[1,2,] <- 2*C1_ji 
-  list_unweighed_matcov_NB[2,1,] <- 2*C1_ji 
+  list_unweighed_matcov_NB[1,2,] <- C1_ji 
+  list_unweighed_matcov_NB[2,1,] <- C1_ji 
   list_unweighed_matcov_NB[2,2,] <- 2*B1_ji 
   
   return (list_unweighed_matcov_NB) 
@@ -1634,12 +1703,16 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       p12_hat.i <- p12_hat_t[i]
       p13_hat.i <- p13_hat_t[i]
       
+      EGzjminGzjGzi_partieA1bis <-calculEGzjminGziGzj_partieA1(lambda.i,k.i,lowerbnd=10^(-6),fac=0.5)#
+      
       EGzjminGzjGzi_partieB <- calculEGzjminGzjGzi_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
       
       # Adding all parts
-      EGzjminGzjGzi <- EGzjminGzjGzi_partieA1 + p13_hat.j + EGzjminGzjGzi_partieB 
+      EGzjminGzjGzi <- EGzjminGzjGzi_partieB + p13_hat.j - EGzjminGzjGzi_partieA1
       
-      matcov_NB_cji <- 2*(EGzjminGzjGzi + (p13_hat.j * p12_hat.i))
+      EGzjminGzjGzibis <- EGzjminGzjGzi_partieB + p13_hat.i - EGzjminGzjGzi_partieA1bis
+      
+      matcov_NB_cji <- 2*(EGzjminGzjGzi+EGzjminGzjGzibis) - 4*((p13_hat.j * p12_hat.i))
     
       list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
       cat("done: unweighed list of components for ",j,", ",i,"\n")
@@ -1681,7 +1754,7 @@ matcovNB_bji <- function(p13_hat_t,lambda_t,k_t){
       k.i <- k_t[i]
       p13_hat.i <- p13_hat_t[i]
       
-      NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
+      NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) - p13_hat.j * p13_hat.i)
       
       list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
       cat("done: unweighed list for j= ", j," i= ",i,"\n")
@@ -1801,7 +1874,7 @@ calculEGzjminGziGzj_partieA1 <- function(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5){
   ##
   ## Used in : matcovNB_cji
   
-  vala=fac*(2*lambda.j)^k.j
+  vala=fac*(lambda.j)^k.j
   I <- integrate(f=foncpartiedeA1EGjminGjGi,lower=lowerbnd,upper=1,subdivisions=1000L,
                  lam=lambda.j,k=k.j,a=vala,
                  stop.on.error = FALSE)
@@ -1834,22 +1907,25 @@ matcovNA_t <- function(p12_hat_t, p13_hat_t,lambda_t,k_t,J){
   
   cat("start: computation of matcov NA","\n")
   
+  p12_hat_t<- as.vector(p12_hat_t)
+  p13_hat_t<- as.vector(p13_hat_t)
+  
   p1rfar_r4 <- p1rfarW_temps(lambda_t,k_t,matrix(4,ncol=1,nrow=J)) 
   p14W_t <- p1rfar_r4$p1r
   
-  p1rfar_r5 <- p1rfarW_temps(lambda_t,k_t,matrix(4,ncol=1,nrow=J)) 
+  p1rfar_r5 <- p1rfarW_temps(lambda_t,k_t,matrix(5,ncol=1,nrow=J)) 
   p15W_t <- p1rfar_r5$p1r
   
   A2_jit <- matcovNA_A2_jit(p12_hat_t, p13_hat_t)
   B2_jit <- matcovNA_B2_jit(p13_hat_t, p15W_t)
   C2_jit <- matcovNA_C2_jit(p12_hat_t, p13_hat_t,p14W_t)
-
-  list_unweighed_NA_t<- array(NA,c(2,2,length(p12_hat_t)))
   
-  list_unweighed_NA_t[1,1,] <- A2_jit
-  list_unweighed_NA_t[1,2,] <- C2_jit
-  list_unweighed_NA_t[2,1,] <- C2_jit
-  list_unweighed_NA_t[2,2,] <- B2_jit
+  list_unweighed_NA_t<- array(NA,c(2,2,J))
+  
+  list_unweighed_NA_t[1,1,] <- as.numeric(A2_jit)
+  list_unweighed_NA_t[1,2,] <- as.numeric(C2_jit)
+  list_unweighed_NA_t[2,1,] <- as.numeric(C2_jit)
+  list_unweighed_NA_t[2,2,] <- as.numeric(B2_jit)
   
   return (list_unweighed_NA_t) 
 }
@@ -1871,16 +1947,9 @@ matcovNA_A2_jit <- function(p12_hat_t,p13_hat_t){
   ##
   ## Requires : nothing
   
-  cat("start: computation of A2ji","\n")
-  
-  list_unweighed_matcov_NA_aji <- c()
-  
-  for (i in 1:length(p12_hat_t)){
-    p12_hat.i <- p12_hat_t[i]
-    p13_hat.i <- p13_hat_t[i]
-    NA_aji <- p13_hat.i - (p12_hat.i)^2
-    list_unweighed_matcov_NA_aji <- c(list_unweighed_matcov_NA_aji, NA_aji)
-  }
+  cat("start computation of A2ji","\n")
+  list_unweighed_matcov_NA_aji <- p13_hat_t - (p12_hat_t)^2
+  cat("end computation of A2ji","\n")
   return (list_unweighed_matcov_NA_aji)
 }
 
@@ -1903,17 +1972,8 @@ matcovNA_B2_jit <- function(p13_hat_t,p15W_t){
   ## Requires : nothing
   
   cat("start: computation of B2ji","\n")
-  
-  list_unweighed_matcov_NA_bji <- c()
-  
-  for (i in 1:length(p13_hat_t)){
-    p13_hat.i <- p13_hat_t[i]
-    p15W_t.i <- p15W_t[i]
-    
-    NA_bji <-  p15W_t.i -  (p13_hat.i)^2
-      
-    list_unweighed_matcov_NA_bji <- c(list_unweighed_matcov_NA_bji, NA_bji)
-  }
+  list_unweighed_matcov_NA_bji <- p15W_t -  (p13_hat_t)^2
+  cat("end computation of B2ji","\n")
   return (list_unweighed_matcov_NA_bji)
 }
 
@@ -1935,18 +1995,8 @@ matcovNA_C2_jit <- function(p12_hat_t,p13_hat_t,p14W_t){
   ## Requires : nothing
   
   cat("start: computation of C2ji","\n")
-  
-  list_unweighed_matcov_NA_cji <- c()
-  
-  for (i in 1:length(p12_hat_t)){
-    p13_hat.i <- p13_hat_t[i]
-    p12_hat.i <- p12_hat_t[i]
-    p14W_t.i <- p14W_t[i]
-    
-    NA_cji <- p14W_t.i - (p12_hat.i * p13_hat.i)
-      
-    list_unweighed_matcov_NA_cji <- c(list_unweighed_matcov_NA_cji, NA_cji)
-    }
+  list_unweighed_matcov_NA_cji <- p14W_t - (p12_hat_t * p13_hat_t)
+  cat("end computation of C2ji","\n")
   return (list_unweighed_matcov_NA_cji)
 }
 
@@ -1956,6 +2006,7 @@ matcovNA_C2_jit <- function(p12_hat_t,p13_hat_t,p14W_t){
 #### Var {lambda_t, k_t}  #####################################################################
 
 matcovtheta_t <- function(matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
+  # output : array num[1:2, 1:2, 1:J]
   J <- length(Z.vec)
   theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lam_t <- theta_t[[1]]
@@ -1965,9 +2016,9 @@ matcovtheta_t <- function(matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
   list_matcovp <- array(NA,c(2,2,J))
   
   for (i in 1:J){
-    list_matcovp[,,i]<- inv(inv(Jacov[[1]][[i]]) %*% matcovN_t[,,i] %*% t(Jacov[[1]][[i]]))
+    list_matcovp[,,i]<- inv(Jacov[[1]][[i]]) %*% matcovN_t[,,i] %*% inv(t(Jacov[[1]][[i]]))
   }
-  # Warning messages:
+  # Warning messages: 
   #   1: In inv(inv(Jacov[[1]][[i]]) %*% matcovN.vec[, , i] %*% t(Jacov[[1]][[i]])) :
   #   Matrix appears to be singular.
   # 2: In inv(inv(Jacov[[1]][[i]]) %*% matcovN.vec[, , i] %*% t(Jacov[[1]][[i]])) :
@@ -1989,10 +2040,11 @@ varp1rfar_t <- function(r,matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
   list_variancep1r_t <- rep(0,J)
   list_variancefar_t <- rep(0,J)
   for (i in 1:J){
-    list_variancep1r_t[i] <- Jacovrminus1[[1]]%*%inv(Jacov12[[1]][[i]]) %*% matcovN_t[,,i] %*% inv(t(Jacov12[[1]][[i]])) %*% t(Jacovrminus1[[i]])
-    list_variancefar_t[i] <- list_variancep1r_t[i] / (sqrt(J)*r*((p1rW_t$p1r[i])^2))
+    Jacov12_inv <- solve(Jacov12[[1]][[i]])
+    list_variancep1r_t[i] <- Jacovrminus1[[i]]%*% Jacov12_inv %*% matcovN_t[,,i] %*% t(Jacov12_inv) %*% t(Jacovrminus1[[i]])
+    #list_variancefar_t[i] <- list_variancep1r_t[i] / (sqrt(J)*r*((p1rW_t$p1r[i])^2))
   }
-  return (list("varp1r_t"=list_variancep1r_t,"varfar_t"=list_variancefar_t,"p1r_t"=p1rW_t$p1r))
+  return (list("varp1r_t"=list_variancep1r_t,"p1r_t"=p1rW_t$p1r))
 }
 
 ## Auxiliary function
@@ -2028,7 +2080,7 @@ CI_p1rfar <- function(p1r.vec,varp1r.vec,r,t_eval,J,alpha=0.5){
 }
 
 # General fonction
-calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
+calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.05){
 
   ## This fucntion computes the upper and lower confidence bounds for p1r
   ##
@@ -2111,8 +2163,8 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
   p1r<-matcov_p1rfar$p1r_t
   stdp1rW <- sqrt(matcov_p1rfar$varp1r_t)
   zalpha <- qnorm(1-alpha/2)
-  lowerbndp1r_t <- p1r*exp(-(zalpha*stdp1rW)/sqrt(J*p1r^2))
-  upperbndp1r_t <-p1r*exp(+(zalpha*stdp1rW)/sqrt(J*p1r^2))
+  lowerbndp1r_t <- p1r - zalpha*stdp1rW
+  upperbndp1r_t <-p1r + zalpha*stdp1rW
   cat("end: CI computation","\n")
   
   #PLOT 1
@@ -2132,7 +2184,7 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
   
   return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"p1r_t"=p1r))
 }
-# KEEP IN LIKE COMMENT UNTIL NB IS DEVELOPED FOR ALL GRIDPOINTS
+# KEEP IN LIKE COMENT UNTIL NB IS DEVELOPED FOR ALL GRIDPOINTS
 # #############  Matcov Na for all points of the map at the same time ###############
 # ### ( Work in progress, not yet implemented as it is not finished for matcovNB)  ##
 # ###################################################################################
@@ -2389,5 +2441,221 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.5){
 #     return (list_unweighed_matcov_NB_bji)
 #   }
 
+##############   Functions that extract lam and k from CMIP simulations        ################
+#############                                                                  ################
 
+theta_map_from_data <-function(variable.df, model.choice, run.choice, varname, savemat=TRUE){
+  
+  ## for a given variable it creates the matrix matlam and matk,
+  ## which contains the the values of the variables for each gridpoint
+  ## and for each t from 1850 to 2100
+  ## 
+  ## Input
+  ## variable.df: the data base containing Tmax trayectories for differents models, scenarios and runs, 
+  ##          e.g. tmax_cmip6_yearmax.rds"
+  ## model.choice: the name of the model in between "", e.g. IPSL-CM6A-LR"
+  ## run.choice:  the name of the tun in between "", e.g. "r1i1p1f1"
+  ## varname: name of the varible of study in between "", e.g. "tmax" or "pr"
+  ##
+  ## Output
+  ## two files.rds, one with de values of lambda and the other with the values of k. the file's names are
+  ## "matlam_",model.choice,"_",run.choice,".rds"
+  ##
+  ## Uses: matGZ_func, weibullGMM_NonStationaire
+  ##
+  
+  stringYear<-toString(model.choice)
+  stringYear<-toString(run.choice)
+  
+  Z_historical <- variable.df %>% 
+    filter(experiment == "historical" & model == model.choice & run == run.choice & between(year, 1850, 2014))  %>% 
+    arrange(year) %>%
+    select(!c(institute,model,experiment,run, year))
+  Z_historical<-as.data.frame(Z_historical)
+  Z_rcp85<- variable.df %>% 
+    filter(experiment == "rcp85" & model == model.choice & run == run.choice & between(year, 2015, 2100))  %>%
+    arrange(year) %>% 
+    select(!c(institute,model,experiment,run, year))
+  Z_rcp85<-as.data.frame(Z_rcp85)
+  matz <- bind_rows(Z_historical,Z_rcp85)
+  matz <-as.matrix(matz)
+  
+  matx<- variable.df %>%
+    filter(experiment == "historicalNat" & model == model.choice & run == run.choice)  %>%
+    arrange(year) %>% select(!c(institute,model,experiment,run, year))
+  matx<-as.matrix(matx)
+  
+  tt<-c(1:dim(matz)[1])
+  
+  matGmZ<-matGZ_func(matx,matz)
+  mattetha <- weibullGMM_NonStationaire(matGmZ, tt, t_eval=tt, h=20, kern=dEpan, truevalues=NULL)
+  matlam <- mattetha$lambdahat
+  matk <- mattetha$khat
+  
+  if (savemat==TRUE){
+    matlam <- as.data.frame(matlam)
+    matk <- as.data.frame(matk)
+    matlam_file_name <- paste("matlam_",varname,model.choice,"_",run.choice,".rds",sep ="")
+    matk_file_name <- paste("matk_",varname,model.choice,"_",run.choice,".rds",sep ="")
+    saveRDS(matlam, file=matlam_file_name)
+    saveRDS(matk, file=matk_file_name)
+  }
 
+  return(list("matrix_lambda"=matlam,"matrix_k"=matk))
+
+}
+
+theta_point_traj_from_data <- function(variable.df, grid_points, model.choice, run.choice, varname,savemat=TRUE){
+  
+  ## for a given variable it creates the matrix matlam and matk,
+  ## which contains the the values of the variables at the chosen grid points
+  ## and for each t from 1850 to 2100
+  ## 
+  ## Input
+  ## variable.df: the data base containing Tmax trayectories for differents models, scenarios and runs, 
+  ##          e.g. tmax_cmip6_yearmax.rds"
+  ## grid_points: vector with the numers of the column, e.g. c(8,500,245)
+  ## model.choice: the name of the model in between "", e.g. IPSL-CM6A-LR"
+  ## run.choice:  the name of the tun in between "", e.g. "r1i1p1f1"
+  ## varname: name of the varible of study in between "", e.g. "tmax" or "pr"
+  ##
+  ## Output
+  ##  - two files.rds, one with de values of lambda and the other with the values of k. the file's names are
+  ## "matlam_",model.choice,"_",run.choice,".rds"
+  ## - 4 matrix : "matrix_lambda","matrix_k","matZ","matX"
+  ##
+  ## Uses: matGZ_func, weibullGMM_NonStationaire
+  ##
+  
+  Z_historical <- variable.df %>% 
+    select (institute,model, experiment, run, year, one_of(str_c(grid_points))) %>%
+    filter(experiment == "historical" & model == model.choice & run == run.choice & between(year, 1850, 2014))  %>% 
+    arrange(year) %>%
+    select(!c(institute,model,experiment,run, year))
+  Z_historical<-as.data.frame(Z_historical)
+  Z_rcp85<- variable.df %>% 
+    select (institute, model, experiment, run, year, one_of(str_c(grid_points))) %>%
+    filter(experiment == "rcp85" & model == model.choice & run == run.choice & between(year, 2015, 2100))  %>%
+    arrange(year) %>% 
+    select(!c(institute,model,experiment,run, year))
+  Z_rcp85<-as.data.frame(Z_rcp85)
+  matz <- bind_rows(Z_historical,Z_rcp85)
+  matz <-as.matrix(matz)
+  
+  matx<- variable.df %>%
+    select (institute, model, experiment, run, year, one_of(str_c(grid_points))) %>%
+    filter(experiment == "historicalNat" & model == model.choice & run == run.choice)  %>%
+    arrange(year) %>% select(!c(institute,model,experiment,run, year))
+  matx<-as.matrix(matx)
+  
+  tt<-c(1:dim(matz)[1])
+  
+  matGmZ<-matGZ_func(matx,matz)
+  mattetha <- weibullGMM_NonStationaire(matGmZ, tt, t_eval=tt, h=50, kern=dEpan, truevalues=NULL)
+  matlam <- mattetha$lambdahat
+  matk <- mattetha$khat
+  
+  if (savemat==TRUE){
+    grid_points <- as.character(grid_points)
+    grid_points_text<- paste("_",grid_points, sep="")
+    grid_points_text <- paste(grid_points_text, collapse = "")
+    grid_points_text <- toString(grid_points_text)
+    matlam <- as.data.frame(matlam)
+    matk <- as.data.frame(matk)
+    matlam_file_name <- paste("matlam_",varname,model.choice,"_",run.choice,grid_points_text,".rds",sep ="")
+    matk_file_name <- paste("matk_",varname,model.choice,"_",run.choice,grid_points_text,".rds",sep ="")
+    saveRDS(matlam, file=matlam_file_name)
+    saveRDS(matk, file=matk_file_name)
+  }
+  return(list("matrix_lambda"=as.matrix(matlam),"matrix_k"=as.matrix(matk),"matZ"=as.matrix(matz),"matX"=as.matrix(matx)))
+}
+
+##################     Functions allowing us to create maps         ############################
+##################                                                  ############################
+
+p1rfarW_yearT <- function(lam.mat,k.mat,r,indext,lowerbnd=10^(-5)){
+  
+  ## This function give containing de value of p1rt_hat at each grid point, for a given r and t
+  ##
+  ## Input :
+  ## - lam.mat : matrix containing lambda parameters of all points at all times 
+  ## - k.mat : matrix containing k parameters of all points at all times 
+  ## - indext : numeric value, position in the vector of the year of interest
+  ## - r :  numeric value, size record
+  ##
+  ## Outplut : a vector of length dim(lam.mat[2]) containing de values of p1rt at each grid point
+  ## 
+  ## Uses : laplaceWeibull
+  
+  lam.vec <- lam.mat[indext,]
+  k.vec <- k.mat[indext,]
+  
+  Nbpoint = length(lam.vec)
+  p1r.vec = rep(0, Nbpoint)
+  
+  for (i in 1:Nbpoint){# for each point
+    p1r.vec[i] <- laplaceWeibull(r-1,lam.vec[i],k.vec[i],lowerbnd=lowerbnd)
+  }  
+  return(p1r.vec) # retourne un vector, mais on aimerait bien une matrice
+}
+
+library('gplots')
+library('fields')
+library('RColorBrewer')
+
+Map_p1r <- function(p1r.vec,r,year){
+  
+  ## This function creates world maps of 36x72 where the color indicates de value of p1rt,
+  ## when p1rt < 1/r the gridpoint is white
+  ## Input :
+  ## - p1r.vec : vector p1rt output of p1rfarW_yearT(), 
+  ##             it must contain p1rt vaules for a given t at each gridpoint
+  ## - r : record size (for deciding where the map is white)
+  ## - year: number. for making the tittle of the plot
+  ##
+  ## Outplut : color map of dimension 36x72 
+
+  p1r.vec[p1r.vec<1/r] <- NA
+  gridmat_p1r <- matrix(data=p1r.vec,nrow=72,ncol=36)
+  grid_lon<-seq(-177.5, 177.5, length.out = 72) 
+  grid_lat<-seq(-87.5, 87.5, length.out = 36)
+  rfcol <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+  colsp <- rfcol(64)
+  image.plot(grid_lon,grid_lat,gridmat_p1r,col = colsp,
+             legend.args = list( text = expression(p["1rt"]),
+                                 cex = 1,
+                                 side = 3,
+                                 line = .5),ylab="latitude",xlab="longitude")
+  stringYear<-toString(year)
+  title(stringYear,cex=0.5,line = .8)
+  world(lwd = 1,add=TRUE) 
+}
+
+Map_far <- function(p1r.vec,r,year){
+  
+  ## This function creates world maps of 36x72 where the color indicates de value of far,
+  ## when far < 0 the gridpoint is white
+  ## Input :
+  ## - p1r.vec : vector p1rt output of p1rfarW_yearT(), 
+  ##             it must contain p1rt vaules for a given t at each gridpoint
+  ## - r : for the computation of far from p1rt
+  ## - year: number. for making the tittle of the plot
+  ##
+  ## Outplut : color map of dimension 36x72 
+  
+  far.vec<-1-(1/(r*p1r.vec))
+  gridmat_far<-matrix(data=far.vec,nrow=72,ncol=36)
+  gridmat_far[gridmat_far<0] <- NA
+  grid_lon<-seq(-177.5, 177.5, length.out = 72) 
+  grid_lat<-seq(-87.5, 87.5, length.out = 36)
+  rfcol <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+  colsp <- rfcol(64)
+  image.plot(grid_lon,grid_lat,gridmat_far,col = colsp,
+             legend.args = list( text = expression(far),
+                                 cex = 1,
+                                 side = 3,
+                                 line = .5),ylab="latitude",xlab="longitude")
+  stringYear<-toString(year)
+  title(stringYear,cex=0.5,line = .8)
+  world(lwd = 1,add=TRUE) 
+}
