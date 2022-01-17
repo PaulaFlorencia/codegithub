@@ -365,7 +365,7 @@ rvalues <- seq(5,30,by=5)
 p1rfar1<-p1rfarW(rep(thetahat$lambdahat[1],6),rep(thetahat$khat[1],6),rvalues) # t1 and sequence of r
 p1rfarestim <- p1rfarW(thetahat$lambdahat,thetahat$khat,matrix(10,ncol=2,nrow=20))
 
-# p1r_t with r=4 for all times 
+# p1r_t with r=4 for 
 p1rfar<-p1rfarW_temps(thetahat[[1]],thetahat[[2]],matrix(4,ncol=1,nrow=size))
 plot(tt,p1rfar$p1r,type="l",col="blue",xlab="t",ylab="p12_4")
 lines(tt,matp$matp12,col="gray")
@@ -492,7 +492,6 @@ FastTestforp1r_frechet <- function(tt,h,r,m,n,N,xi,sigma.vec,muX.vec,muZ.vec){
   return(list("matp1r"=p1rfar$p1r,"matfar"=p1rfar$far,"p1rmean"=p1r_mean))
 }
 
-
 ################################################################################################
 #### 5. Simulation of W-class trajectories with F = non-stationary                          ####
 ################################################################################################
@@ -556,8 +555,6 @@ sigma <- seq(1, 3, length.out = size)
 mu <- seq(1, 2, length.out = size)
 simul8<-simulWclass_nonStationnary_general(m=size,N=1,ksiX=0,sigX=1,muX=0.2,ksiZ=0,muZ=mu,sigZ=sigma) 
 
-
-
 ################################################################################################
 ################################################################################################
 ### lambda_t & k_tUsing GMM                                                                  ###
@@ -568,7 +565,6 @@ library(gmm)
 # functions needed for gmm
 # matGZ_func, weibullGMM_NonStationaire_startval_1, weibullGMM_NonStationaire, 
 # function_gmm_noyaux,laplaceWeibull, funclaplace, dEpan.
-
 
 ################################################################################################
 #### 6. p1r_t estimation of both GMN and Optim                                              ####
@@ -590,6 +586,8 @@ split.screen(c(2,2))
 GZ<-matGZ_func(X,Z)
 param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
 p1r_gmm<-p1rfarW_temps(param[[1]],param[[2]],matrix(r,ncol=1,nrow=size))
+plot(tt,p1r_gmm$p1r,type="l")
+
 # Optim
 matp<-P12_P13_estimation(X,Z,tt,tt,h,kern=dEpan)
 thetahat<-weibullOptim (matp$matp12,matp$matp13,truevalues=NULL) # lam= 1e-05 ,k= 0.2834847 
@@ -642,7 +640,6 @@ param<-weibullGMM_NonStationaire(GZ, tt, tt, h, kern=dEpan, truevalues=NULL)
 system.time(param2<-weibullGMM_NonStationaire_startval_1(GZ, tt, tt, h, kern=dEpan, truevalues=NULL))
 # system time: 14.580 s
 # output: matrix lambdahat and khat :lam= 1.649007e-06 ,k= 0.72061, lam= 0.001947633 ,k= 0.7214428 
-
 
 ####  p1r_t  estimation   ######################################################################
 r=4
@@ -721,7 +718,6 @@ EGMMweibull_NonStationary
 
 summary(EGMMweibull_NonStationary)
 
-
 ################################################################################################
 #### 8. Visialusation of trajectory distributions evolution in time                         ####
 ################################################################################################
@@ -732,7 +728,6 @@ plotd_time(n,0,mu,1,0)
 
 mu = seq(0, 3, length.out = n) 
 plotd_time(n,0,mu,1,0.2)
-
 
 ################################################################################################
 #### 9. Simulation of W-class trajectories with non-sationnary Z                            ####
@@ -769,10 +764,8 @@ simul<-simulWclass_nonStationnary_general(m,N,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n
 # Example 10
 simul<-simulWclass_nonStationnary_general(m=200,N=1,ksiX=0,sigX=1,muX=0,ksiZ = rep(0,n),sigZ=rep(1,n),muZ=seq(0, 1, length.out = n), graph="FALSE")
 
-
-
 ################################################################################################
-#### Trajectories compuatated from CMIP trajectory parameters                               ####
+#### 10. "Realistic" stationary X and Z                                                     ####
 ################################################################################################
 
 ##  TMAX #######################################################################################
@@ -806,7 +799,6 @@ Z <- rgev(m,loc=30.92,scale=0.19,shape=0.46)
 lines(density(Z))
 
 ##  prMAX #######################################################################################
-
 # point 1 
 X <- rgev(m,loc=4.45,scale= 1.42,shape= -0.04)
 plot(density(X))
@@ -834,7 +826,6 @@ Z <- rgev(m,loc=9.07,scale=1.89,shape= -0.21) ## shape parameter of different si
 lines(density(Z))
 
 #####  lambda_t  & k_t estimation ##############################################################
-
 n <- 100
 m <- 100*2
 
@@ -889,35 +880,41 @@ lines(tt,param$lambdahat,col="blue")
 lines(tt,param2$lambdahat,col="red")
 
 ################################################################################################
-#### Testing functions that compute the confidence interval of p1rt                         ####
+#### 11.Variance and confidence intervals estimation                                                          ####
 ################################################################################################
 
 # We will first need to have a X,Z an tt
 
-
 ## Function calcul_ICp1r does everything and and show plot p1rt and its lower and upper bound
 ##############################################################################################
 ploticp1r_test1<-calcul_ICp1r(r=5,X, Z,tt,tt,h=20,alpha=0.5)
-
+ploticp1r_test1<-calcul_ICp1r(r=5,X.vec, Z.vec,tt,tt,h=0.11,alpha=0.5)
 # We can also see the result of the different steps (some computations might be repeted)
 ##############################################################################################
 # var-covar matrix of p12,p13
-matcovp12p13_test1<-matcovp12p13_t(X_real, Z_real,tt_real,tt_real,h=20)
-
+t_eval <- tt
+val_h <- 35
+varp12p13<-matcovp12p13_t(X, Z,tt,tt,h= val_h)
 # varcov matrix for (lambda,k)
-G_m<-ecdf(X_real)
-GmZ<-G_m(Z_real)
-matcovparam_test1<-matcovtheta_t(matcovp12p13_test1, X, Z, GmZ,tt,tt,h=20)
-
+G_m<-ecdf(X)
+GmZ<-G_m(Z)
+matcovparam_test1<-matcovtheta_t(varp12p13, X, Z, GmZ,tt,t_eval,h=val_h)
 # p1r at par variance estimation
-matcov_p1rfar<-varp1rfar_t(r=5,matcovp12p13_test1, X, Z, GmZ,tt,tt_real,h=20)
-matcov_p1rfar$varp1r_t
+varpr<-varp1rfar_t(r=5,matcovp12p13_test1, X, Z, GmZ,tt,t_eval,h=val_h)
+variance_p<-varpr$varp1r_t
+plot(t_eval,variance_p)
 
 # Confodence intervals of p1r (and plot)
 confinterl_test1<-CI_p1rfar(matcov_p1rfar$p1r_t,matcov_p1rfar$varp1r_t,r=7,J=length(Z),tt,alpha=0.5)
 
+# Var(NA)
+variance_NA <- matcovNA_alone(X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE)
+
+#Var(NB)
+variance <- matcovNB_alone(I,X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE)
+
 ################################################################################################
-#### Command line for getting data from tmax cmip6 datastes and saving it                                ####
+#### 12.Command line for getting data from tmax cmip6 datastes and saving it                ####
 ################################################################################################
 
 tmax_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/tmax_cmip6_yearmax.rds")
@@ -929,54 +926,200 @@ library(dplyr)
 # Antarctique - point:94	lon:-72.5	lat:-82.5 / Russie sud - point:2071	lon:92.5	lat:52.5
 # Australie dessert central - point: 999	lon:132.5	lat:-22.5
 
-# Factual (20xx-2100)
-tmax_rcp85_BCC_CSM2_MR<- tmax_cmip6_yearmax %>% 
-  select (institute, model, experiment, run, year, "94","815","999", "1051","1295","1891","2052","2071","2404") %>% 
-  filter(experiment == "rcp85" & model == "BCC-CSM2-MR" & run == "r1i1p1f1"& between(year, 2060, 2100))  %>%
-  arrange(year) %>% select("94","815","999", "1051","1295","1891","2052","2071","2404")
-tmax_rcp85_BCC_CSM2_MR<-as.data.frame(tmax_rcp85_BCC_CSM2_MR)
-#saveRDS(tmax_rcp85_BCC_CSM2_MR, file="tmax_rcp85_BCC_CSM2_MR.rds")
-#df<- readRDS("tmax_rcp85_BCC_CSM2_MR.rds")
-
-#Historical(1850-2014)
-tmax_historical_BCC_CSM2_MR<- tmax_cmip6_yearmax %>% 
-  select (institute, model, experiment, run, year, "94","815","999", "1051","1295","1891","2052","2071","2404") %>% 
-  filter(experiment == "historical" & model == "BCC-CSM2-MR"& run == "r1i1p1f1")  %>% 
-  arrange(year) %>% select("94","815","999", "1051","1295","1891","2052","2071","2404")
-tmax_historical_BCC_CSM2_MR<-as.data.frame(tmax_historical_BCC_CSM2_MR)
-
-# Historical + Factual (1850-2014 + 2015-2100)
-tmax_historicalrecp85_CSM2_MR<- bind_rows(tmax_historical_BCC_CSM2_MR, tmax_rcp85_BCC_CSM2_MR)
-#saveRDS(tmax_historicalrcp85_BCC_CSM2_MR, file="tmax_historicalrcp85_BCC_CSM2_MR.rds")
-#df<- readRDS("tmax_rcp85_BCC_CSM2_MR.rds")
-
-
-# Contrefactuel (1850-2020)
-tmax_historicalNat_BCC_CSM2_MR<- tmax_cmip6_yearmax %>% 
-  select (institute, model, experiment, run, year, "94","815","999", "1051","1295","1891","2052","2071","2404") %>% 
-  filter(experiment == "historicalNat" & model == "BCC-CSM2-MR"& run == "r1i1p1f1")  %>% 
-  arrange(year) %>% select("94","815","999", "1051","1295","1891","2052","2071","2404")
-tmax_historicalNat_BCC_CSM2_MR<-as.data.frame(tmax_historicalNat_BCC_CSM2_MR)
-#saveRDS(tmax_historicalNat_BCC_CSM2_MR, file="tmax_historicalNat_BCC_CSM2_MR.rds")
-#df2<- readRDS("tmax_historicalNat_BCC_CSM2_MR.rds")
 
 ################################################################################################
-#### Simple test with real data                                                             ####
+#### 13. General command line for creating maps                                                         ####
 ################################################################################################
 
-# Factual (2040-2100) point 2404
-Z<- tmax_cmip6_yearmax %>% 
-  select (institute, model, experiment, run, year,"2404") %>% 
-  filter(experiment == "rcp85" & model == "BCC-CSM2-MR" & run == "r1i1p1f1"& between(year, 2040, 2100))  %>%
-  rename(temp=6) %>% arrange(year) %>% select(temp)
-Z<-as.vector(Z[[1]])
-# counterfactual
-X<- tmax_cmip6_yearmax %>% 
-  select (institute, model, experiment, run, year, "2404") %>% 
-  filter(experiment == "historicalNat" & model == "BCC-CSM2-MR"& run == "r1i1p1f1")  %>% 
-  rename(temp=6) %>% arrange(year) %>% select(temp)
-X<-as.vector(X[[1]])
+# Probability and relative probability that 2021 was a recod of (2020-1900) the last 101 years
+# (To know how much human forcings affected records from the last years)
+################################################################################################
+library('gplots')
+library('fields')
+library('RColorBrewer')
+p1r_2021_vec<-p1r_yeart_101ANS[[1]]# vector data: p1rt , t=2021, r=101
+mat_p1r_2021<-matrix(data=p1r_2021_vec,nrow=36,ncol=72) # from vector to matrix
+r=101
+# mat_p1r_2021<-mat_p1r_2021/(1/r) # change to relative . <- il est 20 fois plus probable...
+rfcol <- colorRampPalette(rev(brewer.pal(10,'Spectral'))) # make colors
+colsp <- rfcol(64)
+grid_lon<-seq(-177.5, 177.5, length.out = 36) # x axis
+grid_lat<-seq(-87.5, 87.5, length.out = 72) # y axis
+image.plot(grid_lon,grid_lat,p1r_yeart,col = colsp, # color map #mat_p1r_2021
+           legend.args = list( text = expression(p["1rt"]),
+                               cex = 1,
+                               side = 3,
+                               line = .5),ylab="latitude",xlab="longitude")
+title("2021",cex=0.5,line = .8)
+world(lwd = 1.2,add=TRUE) # world continents bords overlying color map
 
-tt<-c(1:length(Z))
+################################################################################################
+#### 14. Obtain and save tetha map from CMIP dara                                           ####
+################################################################################################
 
-plotp1r<-calcul_ICp1r(r=10,X,Z ,tt,tt,h=20,alpha=0.5)
+tmax_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/tmax_cmip6_yearmax.rds")
+pr_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/df_pr_cmip56_yearmax.rds")
+
+variable.df <- tmax_cmip6_yearmax
+model.choice <- "IPSL-CM6A-LR"	
+run.choice <- "r1i1p1f1"
+theta_map_from_data <-function(variable.df, model.choice, run.choice, varname, savemat=TRUE)
+# var name must be "tmax" or "pr"
+  
+################################################################################################
+#### 15. Obtain CMIP trajectories                                                           ####
+################################################################################################
+
+mat_X_Z <- traj_from_data(variable.df=pr_cmip6_yearmax, grid_points=10, model.choice="CNRM-CM5", run.choice="r1i1p1",var="pr")
+mat_X_Z <- traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=c(1345,30), model.choice="CanESM5", run.choice="r1i1p1f1",var="tmax")
+
+################################################################################################
+#### 16. Obtain lambda and k  from CMIP trajectories                                        ####
+################################################################################################
+
+tetha_h30 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=35,savemat=FALSE)
+
+################################################################################################
+#### 17. Plotting maps from dataframes containing globals lambda and k                      ####
+################################################################################################
+
+matlam<-readRDS("mat_lambda_IPSL_1990_2050_h20_df.rds")
+matk<-readRDS("mat_K_IPSL_1990_2050_h20_df.rds")
+matlam<-as.matrix(matlam)
+matk<-as.matrix(matk)
+p1r_yeart <- p1rfarW_yearT(matlam,matk,r=101,indext=32,lowerbnd=10^(-5)) 
+Map_p1r(p1r_yeart ,r=101,year=2021)
+Map_far(p1r_yeart ,r=101,year=2021)
+
+################################################################################################
+#### 18. function for finding bandwidth of cmip trajectories                                ####
+################################################################################################
+opth <- Optimal_h_cmip(matx,matz,tt,tt,kern=dEpan)
+# where dim(matz)[1] = J and dim(matz)[2] = N
+
+# Finding bandwidth of cmip trajectories                                        
+################################################################################################
+tmax_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/tmax_cmip6_yearmax.rds")
+pr_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/df_pr_cmip56_yearmax.rds")
+#pr: IPSL-CM5A-MR,CCSM4,CNRM-CM5		
+# tmax: IPSL-CM6A-LR,ACCESS-ESM1-5, CanESM5
+mat_X_Z <- traj_from_data(variable.df=pr_cmip6_yearmax, grid_points=10, model.choice="CNRM-CM5", run.choice="r1i1p1",var="pr")
+mat_X_Z <- traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=c(1345,30), model.choice="CanESM5", run.choice="r1i1p1f1",var="tmax")
+matx <- mat_X_Z$matX
+matz <- mat_X_Z$matZ
+tt <- mat_X_Z$time.vec
+opt_h <- Optimal_h_cmip(matx,matz,tt,tt,kern=dEpan)
+hopt <- opt_h$optimal_bandwith
+hopt
+################################################################################################
+#### 19. Test de sensibilité h                                                              ####
+################################################################################################
+
+tmax_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/tmax_cmip6_yearmax.rds")
+pr_cmip6_yearmax <- readRDS("~/Documents/LSCE/datasets/df_pr_cmip56_yearmax.rds")
+
+#### p12 ####################
+
+#pr: IPSL-CM5A-MR,CCSM4,CNRM-CM5		
+# tmax: IPSL-CM6A-LR,ACCESS-ESM1-5, CanESM5
+mat_X_Z <- traj_from_data(variable.df=pr_cmip6_yearmax, grid_points=40, model.choice="CNRM-CM5", run.choice="r1i1p1",var="pr")
+mat_X_Z <- traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=40, model.choice="CanESM5", run.choice="r1i1p1f1",var="tmax")
+matx <- mat_X_Z$matX
+matz <- mat_X_Z$matZ
+tt <- mat_X_Z$time.vec
+h_seq <- c(5,10,20,30,35,40,50,60,70,80,90,100)
+opth <- CV_error(as.numeric(matx),as.numeric(matz),tt,tt,h_seq,kern= dEpan)
+optimal_h <- opth$optimal_bandwith # 40 
+optimal_h
+optimal_err <- opth$optimal_error # 0.240642
+optimal_err
+list_h <- opth$list_h # 5  10  20  30 35 40  50  60  70  80  90 100
+list_err <- opth$list_error # 0.2500971 0.2446360 0.2408348 0.2417599 0.2406420 0.2410444 0.2419509 0.2425025 0.2431047 0.2441206 0.2452855
+list_err
+par(mfrow=c(3,2))
+
+p12_val <- p12_NonPar(matx,matz,tt,tt,optimal_h,kern= dEpan)$p12
+startY<-min(p12_val)
+list_non_opt<-list_h[list_h!=optimal_h]
+list_non_opt<-list_h[list_h!=35]
+plot(tt,p12_NonPar(matx,matz,tt,tt,list_non_opt[1],kern= dEpan)$p12.mat,type="l", col="gray", ylab="p12",xlab="t",ylim = c(startY,1))
+for (i in 2:length(list_non_opt)){
+  lines(tt,p12_NonPar(matx,matz,tt,tt,list_non_opt[i],kern= dEpan)$p12.mat, col="gray")
+}
+lines(tt,p12_NonPar(matx,matz,tt,tt,35,kern= dEpan)$p12.mat,type="l", col="red")
+lines(tt,p12_val,type="l", col="blue")
+plot(list_h,list_err,type="l",ylab="error",xlab="h",)
+points(35, list_err[5], type="p", pch=20, col="red")
+points(optimal_h, optimal_err, type="p", pch=20, col="blue")
+err_35<-list_err[5]
+postext_35<-err_35+0.002
+postext_opt<-err_35+0.005
+text(35,postext_35,round(err_35,3))
+text(optimal_h,postext_opt,round(optimal_err,3))
+
+#### p1r ####################
+r <- 50
+
+X_Z <- traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1",var="tmax")
+matx <- X_Z$matX
+matz <- X_Z$matZ
+tt <- X_Z$time.vec
+opth<-Optimal_h_cmip(matx,matz,tt,tt,kern=dEpan)
+h_optimal <- opth$optimal_bandwith #26
+
+tetha_h26 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=26,savemat=FALSE)
+lam_h26 <- tetha_h26$matrix_lambda
+k_h26 <- tetha_h26$matrix_k
+p1rt_h26<-p1rfarW_temps(lam_h26,k_h26,matrix(r,ncol=1,nrow=dim(lam_h26)[1]))$p1r
+
+tetha_h30 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=30,savemat=FALSE)
+lam_h30 <- tetha_h30$matrix_lambda
+k_h30 <- tetha_h30$matrix_k
+p1rt_h30<-p1rfarW_temps(lam_h30,k_h30,matrix(r,ncol=1,nrow=dim(lam_h30)[1]))$p1r
+
+tetha_h40 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=40,savemat=FALSE)
+lam_h40 <- tetha_h40$matrix_lambda
+k_h40 <- tetha_h40$matrix_k
+p1rt_h40<-p1rfarW_temps(lam_h40,k_h40,matrix(r,ncol=1,nrow=dim(lam_h40)[1]))$p1r
+
+tetha_h50 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=50,savemat=FALSE)
+lam_h50 <- tetha_h50$matrix_lambda
+k_h50 <- tetha_h50$matrix_k
+p1rt_h50<-p1rfarW_temps(lam_h50,k_h50,matrix(r,ncol=1,nrow=dim(lam_h50)[1]))$p1r
+
+tetha_h60 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=60,savemat=FALSE)
+lam_h60 <- tetha_h60$matrix_lambda
+k_h60 <- tetha_h60$matrix_k
+p1rt_h60<-p1rfarW_temps(lam_h60,k_h60,matrix(r,ncol=1,nrow=dim(lam_h60)[1]))$p1r
+
+tetha_h70 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=70,savemat=FALSE)
+lam_h70 <- tetha_h70$matrix_lambda
+k_h70 <- tetha_h70$matrix_k
+p1rt_h70<-p1rfarW_temps(lam_h70,k_h70,matrix(r,ncol=1,nrow=dim(lam_h70)[1]))$p1r
+
+tetha_h80 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=80,savemat=TRUE)
+lam_h80 <- tetha_h80$matrix_lambda
+k_h80 <- tetha_h80$matrix_k
+p1rt_h80<-p1rfarW_temps(lam_h80,k_h80,matrix(r,ncol=1,nrow=dim(lam_h80)[1]))$p1r
+
+tetha_h90 <- theta_point_traj_from_data(variable.df=tmax_cmip6_yearmax, grid_points=10, model.choice="IPSL-CM6A-LR", run.choice="r1i1p1f1", varname="var",h=90,savemat=TRUE)
+lam_h90 <- tetha_h90$matrix_lambda
+k_h90 <- tetha_h90$matrix_k
+p1rt_h90<-p1rfarW_temps(lam_h90,k_h90,matrix(r,ncol=1,nrow=dim(lam_h90)[1]))$p1r
+
+tt<-c(1:dim(lam_h30)[1])
+
+plot(tt,p1rt_h26,type="l", col="pink", ylab="p1r",xlab="t", main=paste("r=",r," h=26"), lwd = 3)
+lines(tt,p1rt_h30,col="blue")
+lines(tt,p1rt_h40,col="black")
+lines(tt,p1rt_h60, col="darkred")
+lines(tt,p1rt_h70, col="darkgreen")
+lines(tt,p1rt_h80, col="orange")
+lines(tt,p1rt_h90, col="gray")
+
+
+
+
+
+
+
