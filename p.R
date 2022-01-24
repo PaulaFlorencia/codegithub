@@ -281,8 +281,8 @@ CVmat_error <- function(matX,matZ,tt,t_eval,mat_h_seq,kern= dEpan){
   opterr.vec = rep(NA,N)
   for(n in 1:N){
     G_Z<-GmZ.mat[,n]
-    Z <- matz[,n]
-    X <- matx[,n]
+    Z <- matZ[,n]
+    X <- matX[,n]
     h_seq = mat_h_seq[,n]
     CV_err_h = rep(NA,length(h_seq))
     for(j in 1:length(h_seq)){
@@ -310,12 +310,13 @@ Optimal_h_cmip<- function(matx,matz,tt,t_eval,kern=dEpan){
   ## Uses : CVmat_error()
   ##
   ## Used in :
-  
+  matx <- as.matrix(matx)
+  matz <- as.matrix(matz)
   N <- dim(matz)[2]
   J <- dim(matz)[1]
   hseq_first <- c(7,10,20,30,40,50,60,70,80,90,100, 110, 120, 130,140,150,160,170,180,190,200)
   mat_h_first <- cbind(hseq_first,hseq_first)
-  h_opt_first <- CVmat_error(matx,matz,tt,tt,mat_h_first,kern)$optimal_bandwith
+  h_opt_first <- CVmat_error(matx,matz,tt,tt,mat_h_first,kern=dEpan)$optimal_bandwith
   
   mat_h <- matrix(numeric(10*J), nrow = 10, ncol = N) # empty matrix
   for (i in 1:N){
@@ -375,7 +376,7 @@ funcLaplace <- function(x,m,lam,k,a){
   (1/a) * exp( -(m*lam/a^(1/k))*(-log(x))^(1/k) ) * x^(1/a - 1)
 }
 
-laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-6),upperbnd=1,fac=1,tol=10^(-5)){
+laplaceWeibull <- function(j,lambda,k,lowerbnd=10^(-5),upperbnd=1,fac=1,tol=10^(-5)){
   
   ## This function computes E(G(Z)^j) 
   ## for any given integer j, where W is a Weibull(lambda,k) variable.
@@ -430,7 +431,8 @@ jacobianFunctiong12 <- function(lam.vec,k.vec,debugg=FALSE){
   ## Used : weibullFsolve() (as J12), matcovtheta_t(), varp1rfar_t()
   ##
   ## Requires : dgjoverdlambdafunc(), dgjoverdkfunc()
-  
+  lam.vec <- as.numeric(lam.vec)
+  k.vec <- as.numeric(k.vec)
   lvec <- length(lam.vec)
   listejacobiennes <- list()
   for (i in 1:lvec){
@@ -455,7 +457,7 @@ foncdgjoverdlambda <- function(u,j,lam,k,a){
   (-j/a^((1/k)+1)) * (-log(u))^(1/k) * exp( -(j*lam/a^(1/k))*(-log(u))^(1/k) ) * u^(1/a - 1) 
 } 
 
-dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-6),fac=0.5){
+dgjoverdlambdafunc <- function(j,lambda,k,lowerbnd=10^(-8),fac=0.5){
   
   ## This utilitary function computes the partial derivative lambda
   ## of the expectation E( exp(-j*W) ) where W is Weibull(lambda,k).
@@ -514,8 +516,8 @@ functionp12p13 <- function(theta,vecx){
   
   lambdaval=theta[1] ; kval = theta[2]
   p12 = vecx[1] ; p13 = vecx[2]
-  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-5))
+  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-5))
   M <- c( p12 - p12val ,  p13 - p13val )
   return(M)
 }
@@ -918,8 +920,8 @@ function_gmm_noyaux<-function(theta,vecx,index,tt.vec,t_eval.vec,bandwidth,kern=
   point_eval=t_eval.vec[index]
   lambdaval=theta[1]; kval=theta[2]
   
-  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
-  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-8))
+  p12val <- laplaceWeibull(j=1,lambda=lambdaval,k=kval,lowerbnd=10^(-5))
+  p13val <- laplaceWeibull(j=2,lambda=lambdaval,k=kval,lowerbnd=10^(-5))
   
   Kij_ti <- outer(point_eval,tt.vec,function(zz,z)dEpan((zz-z)/bandwidth))
   Kij_ti <- t(Kij_ti)
@@ -993,7 +995,7 @@ weibullGMM_NonStationaire <- function(matGm, tt, t_eval, h, kern=dEpan, truevalu
                                        x=Gnhat,
                                        t0=startval_t,
                                        optfct="nlminb",
-                                       lower=c(10^(-8),10^(-8)),upper=c(Inf,Inf),
+                                       lower=c(10^(-5),10^(-5)),upper=c(Inf,Inf),
                                        onlyCoefficients = TRUE
       )
       
@@ -1668,7 +1670,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
 
   ## This fucntion computes the unweighted term Cij of NB_n's asymptotic variance-covariance matrix
   ##
-  ##    Cji =  E( ( 2* G(Z_tj) * min(G(Z_tj),G(Z_ti)) ) - G(Z_tj)^2 *G(Z_ti) )  =  2* E( E_ji - p13_hat.j  * p12_hat.i )
+  ##    Cji =  E ( 2* G(Z_tj) * [min(G(Z_tj),G(Z_ti)) - G(Z_tj)*G(Z_ti)] )  =  2* E( E_ji - p13_hat.j  * p12_hat.i )
   ##
   ## Input :
   ## - \hat{p}_12.t and \hat{p}_13.t vectors from kernel estimation
@@ -1710,7 +1712,7 @@ matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t){
       
       EGzjminGzjGzibis <- EGzjminGzjGzi_partieB + p13_hat.i - EGzjminGzjGzi_partieA1bis
       
-      matcov_NB_cji <- 2*(EGzjminGzjGzi+EGzjminGzjGzibis) - 2*((p13_hat.j * p12_hat.i))
+      matcov_NB_cji <- 2*(EGzjminGzjGzi+EGzjminGzjGzibis) - 2*((p13_hat.j * p12_hat.i)+(p13_hat.i * p12_hat.j))
     
       list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
       cat("done: unweighed list of components for ",j,", ",i,"\n")
@@ -1829,7 +1831,7 @@ funcEGzjminGzjGzi_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^
   facteur1.j = exp( -mprime.j*(-log(v))^(1/k.j) ) 
   facteur2.i=rep(0,nv)
   for (i in 1:nv){
-    facteur2.i[i] = laplaceWeibull( j=1, lambda=lam.i, k=k.i, lowerbnd=(10^-6)*v[i],
+    facteur2.i[i] = laplaceWeibull( j=1, lambda=lam.i, k=k.i, lowerbnd=(10^-5)*v[i],
                                     upperbnd= v[i]^(1/a.j), tol=tol )  # borninf is guaranteed to be both close to 0, AND < v[i] 
   }
   facteur3.j=v^(1/a.j - 1)
@@ -2030,7 +2032,7 @@ varp1rfar_t <- function(r,matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
   theta_t <-weibullGMM_NonStationaire (GmZ, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lam_t <- theta_t[[1]]
   k_t <- theta_t[[2]]
-  p1rW_t <- p1rfarW_temps(as.matrix(lam_t),as.matrix(k_t),as.matrix(rep(r,J)))
+  p1rW_t <- p1rfarW_temps(as.matrix(lam_t),as.matrix(k_t),matrix(r,ncol=1,nrow=J))
   
   Jacov12 <- jacobianFunctiong12(lam_t,k_t)
   Jacovrminus1 <- jacobianFunctiongrminus1(lam_t,k_t,rep(r,J))
@@ -2039,7 +2041,7 @@ varp1rfar_t <- function(r,matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
   list_variancefar_t <- rep(0,J)
   for (i in 1:J){
     Jacov12_inv <- solve(Jacov12[[1]][[i]])
-    Jacov12T_inv <- solve(t(Jacov12[[1]])[[i]])
+    Jacov12T_inv <- solve(t(Jacov12[[1]][[i]]))
     list_variancep1r_t[i] <- Jacovrminus1[[i]]%*% Jacov12_inv %*% matcovN_t[,,i] %*% Jacov12T_inv %*% t(Jacovrminus1[[i]])
     #list_variancefar_t[i] <- list_variancep1r_t[i] / (sqrt(J)*r*((p1rW_t$p1r[i])^2))
   }
@@ -2048,7 +2050,8 @@ varp1rfar_t <- function(r,matcovN_t, X.vec, Z.vec, GmZ,tt,t_eval,h){
 
 ## Auxiliary function
 jacobianFunctiongrminus1 <- function(lam.vec,k.vec,r.vec){
-
+  lam.vec <- as.numeric(lam.vec)
+  k.vec <- as.numeric(k.vec)
   lvec <- length(lam.vec)
   listejacobiennes <- list()
   for (i in 1:lvec){
@@ -2184,7 +2187,7 @@ calcul_ICp1r <- function(r,X.vec, Z.vec,tt,t_eval,h,alpha=0.05){
   return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"p1r_t"=p1r))
 }
 
-matcovNA_alone <- function(X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE){
+matcovNA_alone <- function(X,Z,tt,t_eval,h,graphiques=TRUE){
   
   # weighed variance of NA
   
@@ -2210,10 +2213,10 @@ matcovNA_alone <- function(X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE){
   list_unweighed_NA_t[2,2,] <- as.numeric(B2)
   list_weighed_matcov_N_t<- array(NA,c(2,2,J)) #array
   for (index_t in 1:J){
-    denom<-sum(Kh[index_t,])
+    denom<- 1/J * sum(Kh[,index_t])
     list_khj_t<-c()
-    for (j in 1:dim(Kh)[2]){
-      Khj<-Kh[index_t,j]
+    for (j in 1:dim(Kh)[1]){
+      Khj<-Kh[j,index_t]
       list_khj_t <- c(list_khj_t, (Khj/denom)^2)
     }
     list_weighed_matcov_N_t[1,1,index_t] <- 1/(J^2) * sum(list_khj_t*2*A2) 
@@ -2229,37 +2232,42 @@ matcovNA_alone <- function(X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE){
   return(list_weighed_matcov_N_t)
 }
 
-matcovNB_alone <- function(I,X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE){
+matcovNB_alone <- function(X,Z,tt,t_eval,h,graphiques=TRUE){
   
-  ## weighed variance of NB
+  # weighed variance of NB
   
   X <- as.numeric(X)
   Z <- as.numeric(Z)
   J<-length(Z)
   I <- length(X)
+  p12_hat.vec <- as.vector(p12_NonPar(X,Z,tt,t_eval,h)$p12.mat)
+  p13_hat.vec<- p13_NonPar(X,Z,tt,tt,h)
+  G_emp <- ecdf(X);matGm<- G_emp(Z)
+  tetha<-weibullGMM_NonStationaire(matGm, tt, t_eval, h, kern=dEpan, truevalues=NULL)
+  lambda_h <- tetha$lambdahat
+  k_h <- tetha$khat
   uw_matcovNB_a<-matcovNB_aji(p12_hat.vec,lambda_h,k_h)
   uw_matcovNB_b <- matcovNB_bji(p13_hat.vec,lambda_h,k_h)
   uw_matcovNB_c <- matcovNB_cji(p12_hat.vec,p13_hat.vec,lambda_h,k_h)
   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
   list_weighed_matcov_NB_t<- array(NA,c(2,2,J)) #array
   for (index_t in 1:J){
-    denom<-(sum(Kh[index_t,]))^2
+    denom <- 1/J * sum(Kh[,index_t])
     list_Wji_t <- c()
-    for (j in 1:dim(Kh)[2]){
-      Khj<-Kh[index_t,j]
+    for (j in 1:dim(Kh)[1]){
+      Khj<-Kh[j,index_t]
       for (i in 1:j){
-        Khi <- Kh[index_t,i]
-        KhjKhi <- (Khj * Khi)/denom
+        Khi <- Kh[i,index_t]
+        KhjKhi <- (Khj * Khi)/(denom)^2
         list_Wji_t <- c(list_Wji_t, KhjKhi)
       }
     }
     list_weighed_matcov_NB_t[1,1,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * 2*uw_matcovNB_a )
-    list_weighed_matcov_NB_t[1,2,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * 2*uw_matcovNB_c )  
-    list_weighed_matcov_NB_t[2,1,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * 2*uw_matcovNB_c)   
+    list_weighed_matcov_NB_t[1,2,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * uw_matcovNB_c )  
+    list_weighed_matcov_NB_t[2,1,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * uw_matcovNB_c)   
     list_weighed_matcov_NB_t[2,2,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * 2*uw_matcovNB_b) 
     cat("time", index_t, "weighed","\n")
   }
-  
   if (graphiques==TRUE){
     plot(tt,list_weighed_matcov_NB_t[1,1,])
     plot(tt,list_weighed_matcov_NB_t[1,2,]) 
@@ -2528,7 +2536,8 @@ matcovNB_alone <- function(I,X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE){
 
 ##############   Functions that extract lam and k from CMIP simulations        ################
 #############                                                                  ################
-
+library(dplyr)
+library(stringr)
 traj_from_data <- function(variable.df, grid_points, model.choice, run.choice,var="tmax"){ # tmax or pr
   
   # just extract trayectories: matx, matz and tt 
@@ -2613,7 +2622,7 @@ theta_map_from_data <-function(variable.df, model.choice, run.choice, varname, s
   tt<-c(1:dim(matz)[1])
   
   matGmZ<-matGZ_func(matx,matz)
-  mattetha <- weibullGMM_NonStationaire(matGmZ, tt, t_eval=tt, h=20, kern=dEpan, truevalues=NULL)
+  mattetha <- weibullGMM_NonStationaire(matGmZ, tt, t_eval=tt, h=35, kern=dEpan, truevalues=NULL)
   matlam <- mattetha$lambdahat
   matk <- mattetha$khat
   
@@ -2630,7 +2639,7 @@ theta_map_from_data <-function(variable.df, model.choice, run.choice, varname, s
 
 }
 
-theta_point_traj_from_data <- function(variable.df, grid_points, model.choice, run.choice, varname,hopt=40,savemat=TRUE){
+theta_point_traj_from_data <- function(variable.df, grid_points, model.choice, run.choice, varname,savemat=TRUE){
   
   ## for a given variable it creates the matrix matlam and matk,
   ## which contains the the values of the variables at the chosen grid points
@@ -2676,7 +2685,7 @@ theta_point_traj_from_data <- function(variable.df, grid_points, model.choice, r
   tt<-c(1:dim(matz)[1])
   
   matGmZ<-matGZ_func(matx,matz)
-  mattetha <- weibullGMM_NonStationaire(matGmZ, tt, t_eval=tt, h=hopt, kern=dEpan, truevalues=NULL)
+  mattetha <- weibullGMM_NonStationaire(matGmZ, tt, t_eval=tt, h=35, kern=dEpan, truevalues=NULL)
   matlam <- mattetha$lambdahat
   matk <- mattetha$khat
   
@@ -2746,7 +2755,8 @@ Map_p1r <- function(p1r.vec,r,year){
   grid_lat<-seq(-87.5, 87.5, length.out = 36)
   rfcol <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
   colsp <- rfcol(64)
-  image.plot(grid_lon,grid_lat,gridmat_p1r,col = colsp,
+  r_breaks <- seq(1/r,1,length.out=65)
+  image.plot(grid_lon,grid_lat,gridmat_p1r,col = colsp,breaks = r_breaks,
              legend.args = list( text = expression(p["1rt"]),
                                  cex = 1,
                                  side = 3,
@@ -2775,7 +2785,8 @@ Map_far <- function(p1r.vec,r,year){
   grid_lat<-seq(-87.5, 87.5, length.out = 36)
   rfcol <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
   colsp <- rfcol(64)
-  image.plot(grid_lon,grid_lat,gridmat_far,col = colsp,
+  r_breaks <- seq(1/r,1,length.out=65)
+  image.plot(grid_lon,grid_lat,gridmat_far,col = colsp,breaks = r_breaks,
              legend.args = list( text = expression(far),
                                  cex = 1,
                                  side = 3,
