@@ -908,10 +908,10 @@ plot(t_eval,variance_p)
 confinterl_test1<-CI_p1rfar(matcov_p1rfar$p1r_t,matcov_p1rfar$varp1r_t,r=7,J=length(Z),tt,alpha=0.5)
 
 # Var(NA)
-variance_NA <- matcovNA_alone(X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE)
+variance_NA <- matcovNA_alone(X,Z,tt,t_eval,h,graphiques=TRUE)
 
 #Var(NB)
-variance <- matcovNB_alone(I,X,Z,tt,t_eval,h,lambda_h,k_h,graphiques=TRUE)
+variance_NB <- matcovNB_alone(X,Z,tt,t_eval,h,graphiques=TRUE)
 
 ################################################################################################
 #### 12.Command line for getting data from tmax cmip6 datastes and saving it                ####
@@ -1011,6 +1011,7 @@ tt <- mat_X_Z$time.vec
 opt_h <- Optimal_h_cmip(matx,matz,tt,tt,kern=dEpan)
 hopt <- opt_h$optimal_bandwith
 hopt
+
 ################################################################################################
 #### 19. Test de sensibilité h                                                              ####
 ################################################################################################
@@ -1119,7 +1120,181 @@ lines(tt,p1rt_h90, col="gray")
 
 
 
+################################################################################################
+#### 20. Generate gifs from color maps                                                     ####
+################################################################################################
 
+matlam<-readRDS("matlam_prACCESS1-3_r1i1p1.rds")
+matk<-readRDS("matk_prACCESS1-3_r1i1p1.rds")
+# matlam<-readRDS("matlam_tmaxACCESS-ESM1-5_r1i1p1f1.rds")
+# matk<-readRDS("matk_tmaxACCESS-ESM1-5_r1i1p1f1.rds")
+matlam<-as.matrix(matlam)
+matk<-as.matrix(matk)
+
+library(animation)
+
+saveGIF({
+  record <- 100
+  for (i in 1:dim(matlam)[1]){
+    year_i <- i
+    p1r_yeart <- p1rfarW_yearT(matlam,matk,r=record,indext=year_i,lowerbnd=10^(-5)) 
+    Map_p1r(p1r_yeart ,r=record,year=1850+(year_i-1))
+  }
+})
+
+################################################################################################
+#### 21. theoretic p1rt and estimated CI                                                   ####
+################################################################################################
+
+## from trajectories (X)t (Z)t, from which we know it's distributions parameters, we compute the 
+## theoretic  p1rt values (for a chose r). Then, from (X)t (Z)t we apply our method and find
+## the estimmates confidence intervals. We observe if the theoretic trajectory is in between the 
+## estimated bounds.
+## We fisrt test stationary (Z)t
+
+## Paramaters that we chose
+###########################################
+k <- 0.5 # ksix=0.1(fix) ksiz=0.2
+ksix <- 0.1
+sigzsursigx <- 2 # sigx=1(fix) sigz=2
+sigx <- 1
+mux <- 0 
+
+## params that we find
+###########################################
+ksiz <- ksix/k 
+sigz <- sigzsursigx / sigx
+lam <- (k * sigzsursigx)^(-1/ksix)
+support <- mux- sigx/ksix
+muz <- support + sigz/ksiz
+
+## theoretic p1rt trajectory
+###########################################
+r <- 7 # record of interest
+p1rfar_r <- p1rfarW_temps(rep(lam,size),rep(k,size),matrix(r,ncol=1,nrow=size)) 
+p1rt <- p1rfar_r$p1r
+plot(p1rt,type="l")
+cat("probabilité theorique: ",p1rt[1],"\n") 
+
+## Creation of (X)t and (Z)t
+###########################################
+simul<-simulWclass_nonStationnary_general(I=size*2,N=1,ksiX=ksix,sigX=sigx,muX=mux,ksiZ=rep(ksiz,size),muZ=NULL,sigZ=sigz,unknown="location", graph=TRUE) 
+Ztraj<-simul$matZ
+Xtraj<-simul$matX
+
+## Confidence intervals estimation
+###########################################
+# optimal badwidth
+h_seq <- c(0.03, 0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1)
+err <- CV_error(Xtraj,Ztraj,tt,tt,h_seq,kern= dEpan)
+hopt <- err$optimal_bandwith
+# just a visualisation
+p12_hat.vec <- p12_NonPar(Xtraj,Ztraj,tt,tt,hopt)$p12.mat
+plot(tt,p12_hat.vec,type="l")
+# covariance matrix of the vector p12that/p13that
+covNA <- matcovNA_alone(Xtraj,Ztraj,tt,tt,hopt,graphiques=TRUE)
+sum(  covNA < 0  )
+covNB <- matcovNB_alone(Xtraj,Ztraj,tt,tt,hopt,graphiques=TRUE)
+sum(  covNB < 0  )
+covN<-covNApr+covNBpr
+# estimated values of p1rt and it's variance
+G_emp <- ecdf(Xtraj)
+GmZ <- G_emp(Ztraj)
+variancep1rt<-varp1rfar_t(r,covN, Xtraj, Ztraj, GmZ,tt,tt,hopt)
+plot(variancep1rt$varp1r_t)
+var <-variancep1rt$varp1r_t
+p1rt_hat <- variancep1rt$p1r_t[,1] 
+plot(var)
+plot(tt,p1rt_hat)
+sum(  var < 0  )
+# Construction of confidence intervals
+alpha<- 0.05
+stdp1rW<- sqrt(var)
+zalpha <- qnorm(1-alpha/2)
+lowerbndp1r_t <- p1rt_hat -(zalpha*stdp1rW)
+upperbndp1r_t<- p1rt_hat + (zalpha*stdp1rW)
+upy<-p1rt[size]+0.3
+plot(tt,upperbndp1r_t, type="l",col="gray",ylim=c(0,upy))
+lines(tt,p1rt, col="darkgreen") # theorique
+lines(tt,lowerbndp1r_t,col="gray")
+# to know if the theoretic value is inside the estimated CI
+count_t <- rep(0,size)
+for (i in 1:size){
+  if (p1rt[i]>lowerbndp1r_t[i] & p1rt[i]<upperbndp1r_t[i]){
+    count_t[i]<- count_t[i] +1
+  }
+}
+
+################################################################################################
+#### 22. Script for coverage                                                               ####
+################################################################################################
+
+## We repeat the steps from 21 Num times.For each t 95% of times the theoretic value must be 
+## inside de confidence interval
+
+## Number of times we repeat the prodecure
+###########################################
+Num<- 2
+
+## Paramaters that we chose
+###########################################
+k <- 0.5 # ksix=0.1(fix) ksiz=0.2
+ksix <- 0.1
+sigzsursigx <- 2 # sigx=1(fix) sigz=2
+sigx <- 1
+mux <- 0 
+
+## params that we find
+###########################################
+ksiz <- ksix/k 
+sigz <- sigzsursigx / sigx
+lam <- (k * sigzsursigx)^(-1/ksix)
+support <- mux- sigx/ksix
+muz <- support + sigz/ksiz
+
+## Theoretic p1rt
+###########################################
+size <- 100
+tt <- seq.int(size)/size
+p1rfar_r <- p1rfarW_temps(rep(lam,size),rep(k,size),matrix(r,ncol=1,nrow=size)) 
+p1rt <- p1rfar_r$p1r
+
+## creation of Num trajectorues (X)t and (Z)t
+###########################################
+simul<-simulWclass_nonStationnary_general(I=size*2,N=Num,ksiX=ksix,sigX=sigx,muX=mux,ksiZ=rep(ksiz,size),muZ=NULL,sigZ=sigz,unknown="location", graph=FALSE) 
+Ztraj<-simul$matZ
+Xtraj<-simul$matX
+hopt <- 1
+
+## CI for each column
+###########################################
+alpha<- 0.05
+zalpha <- qnorm(1-alpha/2)
+
+count_t <- rep(0,size) # coverage counter
+
+for (j in 1:Num){
+  Z <- as.numeric(Ztraj[,j])
+  X <- as.numeric(Xtraj[,j])
+  covNA <- matcovNA_alone(X,Z,tt,tt,hopt,graphiques=FALSE)
+  covNB <- matcovNB_alone(X,Z,tt,tt,hopt,graphiques=FALSE)
+  covN<-covNApr+covNBpr
+  G_emp <- ecdf(X)
+  GmZ <- G_emp(Z)
+  variancep1rt<-varp1rfar_t(r,covN, X, Z, GmZ,tt,tt,hopt)
+  var <-variancep1rt$varp1r_t
+  p1rt_hat <- variancep1rt$p1r_t[,1] 
+  stdp1rW<- sqrt(var)
+  lowerbndp1r_t <- p1rt_hat -(zalpha*stdp1rW)
+  upperbndp1r_t<- p1rt_hat + (zalpha*stdp1rW)
+  
+  for (i in 1:size){
+    if (p1rt[i]>lowerbndp1r_t[i] & p1rt[i]<upperbndp1r_t[i]){
+      count_t[i]<- count_t[i] +1
+    }
+  }
+}
+count_t
 
 
 
