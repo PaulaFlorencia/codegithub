@@ -2228,6 +2228,8 @@ matcovNA_alone <- function(X,Z,tt,t_eval,h,graphiques=TRUE){
     plot(tt,list_weighed_matcov_N_t[1,1,])
     plot(tt,list_weighed_matcov_N_t[1,2,])
     plot(tt,list_weighed_matcov_N_t[2,2,])
+    plot(lambda_h)
+    plot(k_h)
   }
   return(list_weighed_matcov_N_t)
 }
@@ -2279,260 +2281,283 @@ matcovNB_alone <- function(X,Z,tt,t_eval,h,graphiques=TRUE){
   
 # KEEP IN LIKE COMENT UNTIL NB IS DEVELOPED FOR ALL GRIDPOINTS
 # #############  Matcov Na for all points of the map at the same time ###############
-# ### ( Work in progress, not yet implemented as it is not finished for matcovNB)  ##
+# ######     i.e modified functions for accepting matrix X and Z as imput     #######
 # ###################################################################################
-# 
-# matcovNA <- function(Kh.mat,p12.mat,p13.mat,lam.mat,k.mat,J,N){
-#   
-#   # les imputs .mat doivent être des matrices
-#   p12.mat <- as.matrix(p12.mat)
-#   p13.mat <- as.matrix(p13.mat)
-#   lam.mat <- as.matrix(lam.mat)
-#   k.mat <- as.matrix(k.mat)
-#   
-#   p14.mat <- p1rfarW_temps(lam.mat,k.mat,r.mat=matrix(4,J,N))$p1r
-#   p15.mat <- p1rfarW_temps(lam.mat,k.mat,r.mat=matrix(5,J,N))$p1r
-#   
-#   Kh2.mat <- Kh.mat^2
-#   
-#   covNA_A.mat <- matcovNA_A(Kh2.mat,p12.mat,p13.mat,J,N)
-#   covNA_B.mat <- matcovNA_B(Kh2.mat,p13.mat,p15.mat,J,N)
-#   covNA_C.mat <- matcovNA_C(Kh2.mat,p12.mat,p13.mat,p14.mat,J,N)
-#   
-#   matcovNA<-list()
-#   for (gridpoint in 1:N){
-#     array_matcovNA_gridpoint <- array(NA,c(2,2,J))
-#     array_matcovNA_gridpoint[1,1,] <- covNA_A.mat[,gridpoint]
-#     array_matcovNA_gridpoint[2,2,] <- covNA_B.mat[,gridpoint]
-#     array_matcovNA_gridpoint[1,2,] <- covNA_C.mat[,gridpoint]
-#     array_matcovNA_gridpoint[2,1,] <- covNA_C.mat[,gridpoint]
-#     
-#     matcovNA <- c(matcovNA, list(array_matcovNA_gridpoint) )
-#   }
-#   return(matcovNA) # list of -> (#1 num [1:2, 1:2, 1:30]), #2...) 
-# }
-# 
-# matcovNA_A <- function(Kh2.mat,p12.mat,p13.mat,J,N){
-#   covNA_A_map <- matrix(NA,nrow = J, ncol = N)
-#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
-#     p1rmix.vec <- p13.mat[,gridpoint] - p12.mat[,gridpoint]^2
-#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`)# by row
-#     Khp1r.vec <- rowSums(Khp1r.mat) 
-#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
-#     covNA_A_map[,gridpoint]<-Khp1r.vec 
-#   }
-#   return(covNA_A_map) # chaque colonne est associé à une position differente
-# }
-# 
-# matcovNA_B <- function(Kh2.mat,p13.mat,p15.mat,J,N){
-#   covNA_B_map <- matrix(NA,nrow = J, ncol = N)
-#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
-#     p1rmix.vec <- p15.mat[,gridpoint] - p13.mat[,gridpoint]^2
-#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`) # by row
-#     Khp1r.vec <- rowSums(Khp1r.mat) 
-#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
-#     covNA_B_map[,gridpoint]<-Khp1r.vec 
-#   }
-#   return(covNA_B_map) # chaque colonne est associé à une position differente
-# }
-# 
-# matcovNA_C <- function(Kh2.mat,p12.mat,p13.mat,p14.mat,J,N){
-#   covNA_C_map <- matrix(NA,nrow = J, ncol = N)
-#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
-#     p1rmix.vec <- p14.mat[,gridpoint] - p12.mat[,gridpoint] * p13.mat[,gridpoint]
-#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`)
-#     Khp1r.vec <- rowSums(Khp1r.mat) 
-#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
-#     covNA_C_map[,gridpoint]<-Khp1r.vec 
-#   }
-#   return(covNA_C_map) # chaque colonne est associé à une position differente
-# }
-# 
-# #########################  Work in progress for matcov NB #########################
-# ###################################################################################
-# ###################################################################################
-# 
-# matcovp12p13_t <- function(X.mat, Z.mat,tt,t_eval,r.mat,h){
-#   
-#   X.mat <- as.matrix(X.mat)
-#   Z.mat <- as.matrix(Z.mat)
-#   r.mat <- as.matrix(r.mat)
-#   
-#   J <- dim(Z.vec)[1]
-#   N <- dim(Z.vec)[2]
-#   I <- dim(X.vec)[1]
-#   
-#   p12p13 <- P12_P13_estimation(X.mat,Z.mat,tt,t_eval,h,kern=dEpan)
-#   GmZ.mat <- p12p13$matGmZ
-#   p12_hat.vec <- p12p13$matp12
-#   p13_hat.vec <- p12p13$matp13
-#   
-#   
-#   theta.mat <-weibullGMM_NonStationaire (GmZ.mat, tt, t_eval, h, kern=dEpan, truevalues=NULL)
-#   lambda.mat <- theta.mat[[1]]
-#   k.mat <- theta.mat[[2]]
-#   
-#   Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
-#   
-#   cov_NA <- matcovNA(Kh, p12_hat.vec, p13_hat.vec, lambda.mat, k.mat, J, N) # output, list of arrays. at each t, var is different
-#   
-#   cov_NB <- (1/I) * matcovNB(Kh,p12_hat.vec, p13_hat.vec,lambda_t,k_t) # add Kh . out out list of matrix. a chaque t, var est le même
-#   # mais olus simple si on crée des arrays aussi 
-#   
-#   cov_N<-list()
-#   for (gridpoint in 1:N){
-#     array_matcovN_gridpoint <- cov_NA[[gridpoint]]+cov_NB[[gridpoint]]
-#     cov_N <- c(cov_N, list(array_matcovN_gridpoint) )# list of arrays
-#   }
-#   return(cov_N)
-# }
-# 
-# #######
-# # matcovNB <- function(Kh.mat,p12.mat,p13.mat,lam.mat,k.mat,J,N)
-# matcovNB <- function(Kh.mat,p12.mat, p13.mat,lam.mat,k.mat,J,N){
-#   
-#   # Calcul "poids"
-#   Wji_t.vec <- list()
-#   for (index_t in 1:dim(Kh)[1]){
-#     denom<-(sum(Kh[index_t,]))^2
-#     Wji_indext <- c()
-#     for (j in 1:dim(Kh)[2]){
-#       Khj<-Kh[index_t,j]
-#       for (i in 1:j){
-#         Khi <- Kh[index_t,i]
-#         KhjKhi <- Khj * Khi
-#         Wji_indext <- c(Wji_indext, KhjKhi)
-#       }
-#     }
-#     Wji_t.vec [[index_t]] <- Wji_indext
-#   }
-#   WjtWit.mat = do.call(cbind, WjtWit)
-#   
-#   covNB_A.mat <- matcovNB_aji(WjtWit.mat, p12.mat, lam.mat, k.mat,J,N)
-#   covNB_B.mat <- matcovNB_bji(WjtWit.mat, p13.mat, lam.mat, k.mat,J,N)
-#   covNB_C.mat <- matcovNB_cji(WjtWit.mat, p12.mat, p13.mat, lam.mat, k.mat,J,N) #matrix where col:dif grid, row=t_evalx
-#   
-#   matcovNB<-list()
-#   for (gridpoint in 1:N){
-#     array_matcovNB_gridpoint <- array(NA,c(2,2,J))
-#     array_matcovNB_gridpoint[1,1,] <- covNB_A.mat[,gridpoint]
-#     array_matcovNB_gridpoint[2,2,] <- covNB_B.mat[,gridpoint]
-#     array_matcovNB_gridpoint[1,2,] <- covNB_C.mat[,gridpoint]
-#     array_matcovNB_gridpoint[2,1,] <- covNB_C.mat[,gridpoint]
-#     
-#     matcovNB <- c(matcovNB, list(array_matcovNB_gridpoint) )
-#   }
-#   return(matcovNB) # list of -> (#1 num [1:2, 1:2, 1:30]), #2...) 
-# }
-# 
-# matcovNB_aji <- function(WjtWit.mat,p12.mat,lam.mat,k.mat,J,N){
-#   cat("start: computation of A1ji","\n")
-#   
-#   #################
-#   ################
-#   covNA_A_map <- matrix(NA,nrow = J, ncol = N)
-#   for (gridpoint in 1:N){ # on doit créer un vecteur de variances pour chaque gridpoint
-#     p1rmix.vec <- p13.mat[,gridpoint] - p12.mat[,gridpoint]^2
-#     Khp1r.mat <- sweep(Kh2.mat, MARGIN=1, p1rmix.vec, `*`)# by row
-#     Khp1r.vec <- rowSums(Khp1r.mat) 
-#     # Khp1r.vec est un vecteur car à chaque pas de temps la variance sera different
-#     covNA_A_map[,gridpoint]<-Khp1r.vec 
-#   }
-#   return(covNA_A_map) # chaque colonne est associé à une position differente
-#   ################
-#   ##############
-#   covNB_A_map <- matrix(NA,nrow = J, ncol = N)
-#   for (gridpoint in 1:N){ 
-#     for (j in 1:J){
-#       lambda.j <- lambda_t[j]
-#       k.j <- k_t[j]
-#       p12_hat.j <- p12_hat_t[j]
-#     }
-#     ####
-#     for (j in 1:length(p12_hat_t)){
-#       cat("start: components for j= ",j,"\n")
-#       lambda.j <- lambda_t[j]
-#       k.j <- k_t[j]
-#       p12_hat.j <- p12_hat_t[j]
-#       
-#       for (i in 1:j){
-#         cat("start: components for i= ",i,"\n")
-#         lambda.i <- lambda_t[i]
-#         k.i <- k_t[i]
-#         p12_hat.i <- p12_hat_t[i]
-#         
-#         matcov_NB_aji <-Mrfuncji(2,lambda.j,k.j,lambda.i,k.i) - p12_hat.j * p12_hat.i
-#         
-#         list_unweighed_matcov_NB_aji <- c(list_unweighed_matcov_NB_aji, matcov_NB_aji)
-#         cat("done: unweighed list of components for ",j,", ",i,"\n")
-#       }
-#     }
-#     return (list_unweighed_matcov_NB_aji)
-#   }
-#   
-#   matcovNB_cji <- function(p12_hat_t,p13_hat_t,lambda_t,k_t,J,N){
-#     
-#     cat("start: computation of C1ji","\n")
-#     
-#     list_unweighed_matcov_NB_cji <- c()
-#     
-#     for (j in 1:length(p12_hat_t)){
-#       cat("start: components for j= ",j,"\n")
-#       lambda.j <- lambda_t[j]
-#       k.j <- k_t[j]
-#       p12_hat.j <- p12_hat_t[j]
-#       p13_hat.j <- p13_hat_t[j]
-#       
-#       EGzjminGzjGzi_partieA1 <-calculEGzjminGziGzj_partieA1(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
-#       
-#       for (i in 1:j){
-#         cat("start: components for i= ",i,"\n")
-#         lambda.i <- lambda_t[i]
-#         k.i <- k_t[i]
-#         p12_hat.i <- p12_hat_t[i]
-#         p13_hat.i <- p13_hat_t[i]
-#         
-#         EGzjminGzjGzi_partieB <- calculEGzjminGzjGzi_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
-#         
-#         # Adding all parts
-#         EGzjminGzjGzi <- EGzjminGzjGzi_partieA1 + p13_hat.j + EGzjminGzjGzi_partieB 
-#         
-#         matcov_NB_cji <- 2*(EGzjminGzjGzi + (p13_hat.j * p12_hat.i))
-#         
-#         list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
-#         cat("done: unweighed list of components for ",j,", ",i,"\n")
-#       }
-#     }
-#     return (list_unweighed_matcov_NB_cji)
-#   }
-#   
-#   matcovNB_bji <- function(p13_hat_t,lambda_t,k_t,J,N){
-#     
-#     
-#     cat("start: computation of B1ji","\n")
-#     
-#     list_unweighed_matcov_NB_bji <- c()
-#     
-#     for (j in 1:length(p13_hat_t)){
-#       cat("start: components for j= ",j,"\n")
-#       lambda.j <- lambda_t[j]
-#       k.j <- k_t[j]
-#       p13_hat.j <- p13_hat_t[j]
-#       
-#       for (i in 1:j){
-#         cat("start: components for i= ",i,"\n")
-#         lambda.i <- lambda_t[i]
-#         k.i <- k_t[i]
-#         p13_hat.i <- p13_hat_t[i]
-#         
-#         NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) + p13_hat.j * p13_hat.i)
-#         
-#         list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
-#         cat("done: unweighed list for j= ", j," i= ",i,"\n")
-#       }
-#     }
-#     return (list_unweighed_matcov_NB_bji)
-#   }
+
+#################### matcovP12P13 ######
+
+#################### unweighed matcovNA ######
+matcovNA_t_matrix <- function(p12mat, p13mat,lambda_t.mat,k_t.mat,J,N){
+  p14far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(4,J,N))
+  p14mat <- p14far.mat$p1r
+  p15far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(5,J,N))
+  p15mat <- p15far.mat$p1r
+  covNA_A.mat <- matcovNA_A2_jit(p12mat,p13mat)
+  covNA_B.mat <- matcovNA_B2_jit(p13mat,p15mat)
+  covNA_C.mat <- matcovNA_C2_jit(p12mat,p13mat,p14mat)
+  list_unweighedNA_matrix <- list()
+  for (gridpoint in 1:N){
+    array_matcovNA_gridpoint <- array(NA,c(2,2,J))
+    array_matcovNA_gridpoint[1,1,] <- covNA_A.mat[,gridpoint]
+    array_matcovNA_gridpoint[2,2,] <- covNA_B.mat[,gridpoint]
+    array_matcovNA_gridpoint[1,2,] <- covNA_C.mat[,gridpoint]
+    array_matcovNA_gridpoint[2,1,] <- covNA_C.mat[,gridpoint]
+    list_unweighedNA_matrix <- c(list_unweighedNA_matrix, list(array_matcovNA_gridpoint) )
+    # list of 3  (each list is a different component)
+    # num [1:2 , 1:2 , 1:50] 1 <- gridpoint 1 , 2 <- gridpoint 2
+  }
+  return(list_unweighedNA_matrix)
+}
+
+#################### unweighed matcovNB ######
+matcovNB_matrix <- function(p12mat, p13mat, lambda_t.mat, k_t.mat,N){
+  # weighed variance of NB
+  
+  covNB_A.mat <-matcovNB_aji_matrix(p12mat,lambda_t.mat,k_t.mat)
+  covNB_B.mat  <-matcovNB_bji_matrix(p13mat,lambda_t.mat,k_t.mat)
+  covNB_C.mat <-matcovNB_cji_matrix(p12mat,p13mat,lambda_t.mat,k_t.mat)
+  
+  list_unweighedNB_matrix <- list()
+  for (gridpoint in 1:N){
+    array_matcovNB_gridpoint <- array(NA,c(2,2,dim(covNB_A.mat)[1]))
+    array_matcovNB_gridpoint[1,1,] <- covNB_A.mat[,gridpoint]
+    array_matcovNB_gridpoint[2,2,] <- covNB_B.mat[,gridpoint]
+    array_matcovNB_gridpoint[1,2,] <- covNB_C.mat[,gridpoint]
+    array_matcovNB_gridpoint[2,1,] <- covNB_C.mat[,gridpoint]
+    list_unweighedNB_matrix <- c(list_unweighedNB_matrix, list(array_matcovNB_gridpoint) )
+    # list of 2 (each list is for a grid point)
+    # num [1:2 , 1:2 , dim(covNB_A.mat)[1]] 
+  }
+  return(list_unweighedNB_matrix)
+}
+
+### NB  components
+matcovNB_aji_matrix <- function(p12mat,lambda_t.mat,k_t.mat){
+  cat("start: computation of A1ji","\n")
+  J <- dim(p12mat)[1]
+  N <- dim(p12mat)[2]
+  
+  uwNBmat <- c()
+  for (gridpoint in 1:N){
+    cat("start: trajectory N = ",gridpoint,"\n")
+    p12_hat_t <- p12mat[,gridpoint]
+    lambda_t <- lambda_t.mat[,gridpoint]
+    k_t <- k_t.mat[,gridpoint]
+    
+    list_unweighed_matcov_NB_aji <- c()
+    for (j in 1:J){
+      cat("start: components for j= ",j,"\n")
+      lambda.j <- lambda_t[j]
+      k.j <- k_t[j]
+      p12_hat.j <- p12_hat_t[j]
+      for (i in 1:j){
+        cat("start: components for i= ",i,"\n")
+        lambda.i <- lambda_t[i]
+        k.i <- k_t[i]
+        p12_hat.i <- p12_hat_t[i]
+        
+        matcov_NB_aji <-Mrfuncji(2,lambda.j,k.j,lambda.i,k.i) - ( p12_hat.j * p12_hat.i)
+        
+        list_unweighed_matcov_NB_aji <- c(list_unweighed_matcov_NB_aji, matcov_NB_aji)
+        cat("done: unweighed list of components for ",j,", ",i,"\n")
+      }
+    }
+    uwNBmat <- cbind(uwNBmat,list_unweighed_matcov_NB_aji)
+  }
+  return (uwNBmat)
+}
+
+matcovNB_bji_matrix <- function(p13mat,lambda_t.mat,k_t.mat){
+  cat("start: computation of B1ji","\n")
+  J <- dim(p13mat)[1]
+  N <- dim(p13mat)[2]
+  
+  uwNBmat <- c()
+  for (gridpoint in 1:N){
+    cat("start: trajectory N = ",gridpoint,"\n")
+    p13_hat_t <- p13mat[,gridpoint]
+    lambda_t <- lambda_t.mat[,gridpoint]
+    k_t <- k_t.mat[,gridpoint]
+    
+    list_unweighed_matcov_NB_bji <- c()
+    for (j in 1:J){
+      cat("start: components for j= ",j,"\n")
+      lambda.j <- lambda_t[j]
+      k.j <- k_t[j]
+      p13_hat.j <- p13_hat_t[j]
+      
+      for (i in 1:j){
+        cat("start: components for i= ",i,"\n")
+        lambda.i <- lambda_t[i]
+        k.i <- k_t[i]
+        p13_hat.i <- p13_hat_t[i]
+        
+        NB_bji <- 4*(Mrfuncji(3,lambda.j,k.j,lambda.i,k.i) - (p13_hat.j * p13_hat.i))
+        
+        list_unweighed_matcov_NB_bji <- c(list_unweighed_matcov_NB_bji, NB_bji)
+        cat("done: unweighed list for j= ", j," i= ",i,"\n")
+      }
+    }
+    uwNBmat <- cbind(uwNBmat,list_unweighed_matcov_NB_bji)
+  }
+  return (uwNBmat)
+}
+
+matcovNB_cji_matrix <- function(p12mat, p13mat,lambda_t.mat,k_t.mat){
+  cat("start: computation of C1ji","\n")
+  J <- dim(p13mat)[1]
+  N <- dim(p13mat)[2]
+  
+  uwNBmat <- c()
+  for (gridpoint in 1:N){
+    cat("start: trajectory N = ",gridpoint,"\n")
+    p12_hat_t <- p12mat[,gridpoint]
+    p13_hat_t <- p13mat[,gridpoint]
+    lambda_t <- lambda_t.mat[,gridpoint]
+    k_t <- k_t.mat[,gridpoint]
+    
+    list_unweighed_matcov_NB_cji <- c()
+    for (j in 1:J){
+      cat("start: components for j= ",j,"\n")
+      lambda.j <- lambda_t[j]
+      k.j <- k_t[j]
+      p12_hat.j <- p12_hat_t[j]
+      p13_hat.j <- p13_hat_t[j]
+      
+      EGzjminGzjGzi_partieA1 <-calculEGzjminGziGzj_partieA1(lambda.j,k.j,lowerbnd=10^(-6),fac=0.5)
+      
+      for (i in 1:j){
+        cat("start: components for i= ",i,"\n")
+        lambda.i <- lambda_t[i]
+        k.i <- k_t[i]
+        p12_hat.i <- p12_hat_t[i]
+        p13_hat.i <- p13_hat_t[i]
+        
+        EGzjminGzjGzi_partieA1bis <-calculEGzjminGziGzj_partieA1(lambda.i,k.i,lowerbnd=10^(-6),fac=0.5)#
+        
+        EGzjminGzjGzi_partieB <- calculEGzjminGzjGzi_partieB(lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10^(-5))
+        
+        # Adding all parts
+        EGzjminGzjGzi <- EGzjminGzjGzi_partieB + p13_hat.j - EGzjminGzjGzi_partieA1
+        
+        EGzjminGzjGzibis <- EGzjminGzjGzi_partieB + p13_hat.i - EGzjminGzjGzi_partieA1bis
+        
+        matcov_NB_cji <- 2*(EGzjminGzjGzi+EGzjminGzjGzibis) - 2*((p13_hat.j * p12_hat.i)+(p13_hat.i * p12_hat.j))
+        
+        list_unweighed_matcov_NB_cji <- c(list_unweighed_matcov_NB_cji, matcov_NB_cji)
+        cat("done: unweighed list of components for ",j,", ",i,"\n")
+      }
+    }
+    uwNBmat <- cbind(uwNBmat,list_unweighed_matcov_NB_cji)
+  }
+  return (uwNBmat)
+}
+
+########## matcov NA and matcov NB computated separately ############################
+######################################################################################
+matcovNA_alone_matrix <- function(X.mat, Z.mat,tt,t_eval,h){
+  
+  # weighed variance of NA
+  
+  J <- dim(Zmat)[1]
+  Nn <- dim(Zmat)[2]
+  p12p13mat <- P12_P13_estimation(Xmat,Zmat,tt,tt,h=h,kern=dEpan)
+  p12mat <- p12p13mat$matp12
+  p13mat <- p12p13mat$matp13
+  GmZmat <- p12p13mat$matGmZ
+  
+  theta_t.mat <-weibullGMM_NonStationaire (GmZmat, tt, tt, h, kern=dEpan, truevalues=NULL)
+  lambda_t.mat <- theta_t.mat[[1]]
+  k_t.mat <- theta_t.mat[[2]]
+  p14far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(4,J,Nn))
+  p14mat <- p14far.mat$p1r
+  p15far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(5,J,Nn))
+  p15mat <- p15far.mat$p1r
+  covNA_A.mat <- matcovNA_A2_jit(p12mat,p13mat)
+  covNA_B.mat <- matcovNA_B2_jit(p13mat,p15mat)
+  covNA_C.mat <- matcovNA_C2_jit(p12mat,p13mat,p14mat)
+  Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
+  list_unweighedNA_matrix <- list()
+  for (gridpoint in 1:N){
+    array_matcovNA_gridpoint <- array(NA,c(2,2,J))
+    array_matcovNA_gridpoint[1,1,] <- covNA_A.mat[,gridpoint]
+    array_matcovNA_gridpoint[2,2,] <- covNA_B.mat[,gridpoint]
+    array_matcovNA_gridpoint[1,2,] <- covNA_C.mat[,gridpoint]
+    array_matcovNA_gridpoint[2,1,] <- covNA_C.mat[,gridpoint]
+    list_unweighedNA_matrix <- c(matcovNA, list(array_matcovNA_gridpoint) )
+  }
+  matcovNA<-list()
+  for (gridpoint in 1:N){
+    uwNA_gridpoint <- list_unweighedNA_matrix[[gridpoint]] # array 
+    list_weighed_matcov_NA_t<- array(NA,c(2,2,J)) #array
+    for (index_t in 1:J){
+      denom<- 1/J * sum(Kh[,index_t])
+      list_khj_t<-c()
+      for (j in 1:dim(Kh)[1]){
+        Khj<-Kh[j,index_t]
+        list_khj_t <- c(list_khj_t, (Khj/denom)^2)
+      }
+      list_weighed_matcov_NA_t[1,1,index_t] <- (1/(J^2) * sum(list_khj_t * 2 * uwNA_gridpoint[1,1,]))
+      list_weighed_matcov_NA_t[1,2,index_t] <- (1/(J^2) * sum(list_khj_t * 2 * uwNA_gridpoint[1,2,]))
+      list_weighed_matcov_NA_t[2,1,index_t] <- (1/(J^2) * sum(list_khj_t * 2 * uwNA_gridpoint[2,1,]))
+      list_weighed_matcov_NA_t[2,2,index_t] <- (1/(J^2) * sum(list_khj_t * 2 * uwNA_gridpoint[2,2,])) 
+      cat("time", index_t, "weighed","\n")
+    }
+    matcovNA<- c(matcovNA,list(list_weighed_matcov_NA_t))
+  }
+  return(matcovNA)
+}
+
+matcovNB_alone_matrix <- function(X.mat, Z.mat,tt,t_eval,h){
+  # weighed variance of NB
+  X.mat <- as.matrix(X.mat)
+  Z.mat <- as.matrix(Z.mat)
+  J <- dim(Zmat)[1]
+  I <- dim(Xmat)[1]
+  Nn <- dim(Zmat)[2]
+  p12p13mat <- P12_P13_estimation(Xmat,Zmat,tt,t_eval,h=h,kern=dEpan)
+  p12mat <- p12p13mat$matp12
+  p13mat <- p12p13mat$matp13
+  GmZmat <- p12p13mat$matGmZ
+  theta_t.mat <-weibullGMM_NonStationaire (GmZmat, tt, t_eval, h, kern=dEpan, truevalues=NULL)
+  lambda_t.mat <- theta_t.mat[[1]]
+  k_t.mat <- theta_t.mat[[2]]
+  covNA_A.mat <-matcovNB_aji_matrix(p12mat,lambda_t.mat,k_t.mat)
+  covNA_B.mat  <-matcovNB_bji_matrix(p13mat,lambda_t.mat,k_t.mat)
+  covNA_C.mat <-matcovNB_cji_matrix(p12mat,p13mat,lambda_t.mat,k_t.mat)
+  Kh <- outer(t_eval, tt, function(zz,z) dEpan((zz - z) / h))
+  matcovNB<-list()
+  for (gridpoint in 1:N){
+    covNA_A.mat_gridpoint <- covNA_A.mat [,gridpoint]
+    covNA_B.mat_gridpoint <- covNA_B.mat [,gridpoint]
+    covNA_C.mat_gridpoint <- covNA_C.mat [,gridpoint]
+    list_weighed_matcov_NB_t<- array(NA,c(2,2,J)) #array
+    for (index_t in 1:J){
+      denom <- 1/J * sum(Kh[,index_t])
+      list_Wji_t <- c()
+      for (j in 1:dim(Kh)[1]){
+        Khj<-Kh[j,index_t]
+        for (i in 1:j){
+          Khi <- Kh[i,index_t]
+          KhjKhi <- (Khj * Khi)/(denom)^2
+          list_Wji_t <- c(list_Wji_t, KhjKhi)
+        }
+      }
+      list_weighed_matcov_NB_t[1,1,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * 2*covNA_A.mat_gridpoint )
+      list_weighed_matcov_NB_t[1,2,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * covNA_C.mat_gridpoint )  
+      list_weighed_matcov_NB_t[2,1,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * covNA_C.mat_gridpoint)   
+      list_weighed_matcov_NB_t[2,2,index_t] <- (1/I) * 1/(J^2) * sum(list_Wji_t * 2*covNA_B.mat_gridpoint) 
+      cat("time", index_t, "weighed","\n")
+    }
+    matcovNB<- c(matcovNB,list(list_weighed_matcov_NB_t))
+  }
+  return(matcovNB)
+}
+
+
+
+
+
 
 ##############   Functions that extract lam and k from CMIP simulations        ################
 #############                                                                  ################
