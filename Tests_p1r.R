@@ -1244,51 +1244,70 @@ sigz <- sigzsursigx / sigx
 lam <- (k * sigzsursigx)^(-1/ksix)
 support <- mux- sigx/ksix
 muz <- support + sigz/ksiz
+# lam
 
 ## Theoretic p1rt
 ###########################################
-size <- 100
-tt <- seq.int(size)/size
-r <- 10
-p1rfar_r <- p1rfarW_temps(rep(lam,size),rep(k,size),matrix(r,ncol=1,nrow=size)) 
+J <- 100
+tt <- seq.int(J)/J
+r <- 100 ###
+p1rfar_r <- p1rfarW_temps(rep(lam,J),rep(k,J),matrix(r,ncol=1,nrow=J)) 
 p1rt <- p1rfar_r$p1r
+# plot(p1rt)
 
 ## creation of Num trajectorues (X)t and (Z)t
 ###########################################
-simul<-simulWclass_nonStationnary_general(I=size*2,N=Num,ksiX=ksix,sigX=sigx,muX=mux,ksiZ=rep(ksiz,size),muZ=NULL,sigZ=sigz,unknown="location", graph=FALSE) 
+simul<-simulWclass_nonStationnary_general(I=J*2,N=Num,ksiX=ksix,sigX=sigx,muX=mux,ksiZ=rep(ksiz,J),muZ=NULL,sigZ=sigz,unknown="location", graph=FALSE) 
 Ztraj<-simul$matZ
 Xtraj<-simul$matX
-hopt <- 1
+hopt <- 1 ###
 
 ## CI for each column
 ###########################################
-alpha<- 0.05
+alpha<- 0.01
 zalpha <- qnorm(1-alpha/2)
 
 count_t <- rep(0,size) # coverage counter
 
+# par(mfrow=c(2,2))
+
 for (j in 1:Num){
+  # n <- 1
   Z <- as.numeric(Ztraj[,j])
   X <- as.numeric(Xtraj[,j])
   covNA <- matcovNA_alone(X,Z,tt,tt,hopt,graphiques=FALSE)
   covNB <- matcovNB_alone(X,Z,tt,tt,hopt,graphiques=FALSE)
   covN<-covNA+covNB
+  # plot(covN[1,1,])
+  # plot(covN[1,2,])
+  # plot(covN[2,2,])
+  
+  # covNtotal <- matcovp12p13_t(X, Z,tt,tt,hopt)
+  # variancep1rtTOTAL<-varp1rfar_t(r,covNtotal, X, Z, GmZ,tt,tt,hopt)
+  # vartotal <-variancep1rt$varp1r_t
+  # plot(vartotal)
+  
   G_emp <- ecdf(X)
   GmZ <- G_emp(Z)
   variancep1rt<-varp1rfar_t(r,covN, X, Z, GmZ,tt,tt,0.1)
   var <-variancep1rt$varp1r_t
+  # plot(var)
   p1rt_hat <- variancep1rt$p1r_t[,1] 
   stdp1rW<- sqrt(var)
   lowerbndp1r_t <- p1rt_hat -(zalpha*stdp1rW)
   upperbndp1r_t<- p1rt_hat + (zalpha*stdp1rW)
   
-  for (i in 1:size){
-    if (p1rt[i]>lowerbndp1r_t[i] & p1rt[i]<upperbndp1r_t[i]){
+  upy<-p1rt[J]+0.3
+  plot(tt,upperbndp1r_t, type="l",col="gray",ylim=c(0,upy))
+  lines(tt,p1rt, col="darkgreen")
+  lines(tt,lowerbndp1r_t,col="gray")
+  for (i in 1:J){
+    if (  between(p1rt[i],lowerbndp1r_t[i],upperbndp1r_t[i]) == TRUE){
       count_t[i]<- count_t[i] +1
     }
   }
 }
-count_t # compt combien des fois le p1rt theorique est dedans les intervales estimés
+count_t/Num # compt combien des fois le p1rt theorique est dedans les intervales estimés
 
 
 
