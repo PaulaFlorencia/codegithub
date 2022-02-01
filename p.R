@@ -1542,11 +1542,11 @@ matcovp12p13_t <- function(X.vec, Z.vec,tt,t_eval,h){
   
   list_weighed_matcov_N_t<- array(NA,c(2,2,J))
   
-  list_unweighed_matcov_NB <- (1/I) * 2* matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
+  list_unweighed_matcov_NB <- (1/I) * matcovNB(p12_hat.vec, p13_hat.vec,lambda_t,k_t)
   list_unweighed_matcov_NA_t<- 2 * matcovNA_t(p12_hat.vec, p13_hat.vec,lambda_t,k_t,J)
 
-  A1ji <- list_unweighed_matcov_NB[1,1,]
-  B1ji <- list_unweighed_matcov_NB[2,2,]
+  A1ji <- 2 * list_unweighed_matcov_NB[1,1,]
+  B1ji <- 2 * list_unweighed_matcov_NB[2,2,]
   D1ji <- list_unweighed_matcov_NB[1,2,]
   C1ji <- list_unweighed_matcov_NB[2,1,]
   
@@ -1764,6 +1764,7 @@ matcovNB_bji <- function(p13_hat_t,lambda_t,k_t){
 }
 
 
+### Auxiliary functions ####
 funcLaplaceterji <- function(v,m,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
   # Utilitary function inside Mrfuncji
   nv=length(v)
@@ -1817,7 +1818,6 @@ Mrfuncji <- function(r,lambda.j,k.j,lambda.i,k.i,lowerbnd=10^(-5),fac=0.5,tol=10
                  stop.on.error = FALSE)
   return(I$value)
 }
-
 
 funcEGzjminGzjGzi_partieB <- function(v,lam.j,k.j,lam.i,k.i,a.j,a.i,lowerbnd=10^(-5),tol=10^(-5)){
   
@@ -1953,7 +1953,6 @@ matcovNA_A2_jit <- function(p12_hat_t,p13_hat_t){
   return (list_unweighed_matcov_NA_aji)
 }
 
-
 matcovNA_B2_jit <- function(p13_hat_t,p15W_t){
 
   ## This fucntion computes the unweighted list B2_ij of NA's variance-covariance matrix
@@ -2067,18 +2066,46 @@ jacobianFunctiongrminus1 <- function(lam.vec,k.vec,r.vec){
 ##################                                                 ############################
 
 # temporary
-CI_p1rfar <- function(p1r.vec,varp1r.vec,r,t_eval,J,alpha=0.5){
+CI_p1rfar <- function(p1rt_hat,varp1r.vec,t_eval,J,alpha=0.1,graphique=TRUE){
+  
+  ## computation of CI , given p1rt_hat and it's variance. plot option
   
   stdp1rW <- sqrt(varp1r.vec)
   zalpha <- qnorm(1-alpha/2)
-  lowerbndp1r_t <- p1r.vec*exp(-(zalpha*stdp1rW)/sqrt(J*p1r.vec^2))
-  upperbndp1r_t <- p1r.vec*exp(+(zalpha*stdp1rW)/sqrt(J*p1r.vec^2))
+  lowerbndp1r_t <- p1rt_hat -(zalpha*stdp1rW)
+  upperbndp1r_t<- p1rt_hat + (zalpha*stdp1rW)
   
-  plot(t_eval,upperbndp1r_t, type="l",col="gray")
-  lines(t_eval,p1r.vec, col="darkgreen")
-  lines(t_eval,lowerbndp1r_t,col="gray")
+  if (graphique==TRUE){
+    upy<-p1rt[J]+0.3
+    plot(tt,upperbndp1r_t, type="l",col="gray",ylim=c(0,upy))
+    lines(tt,p1rt_hat, col="darkgreen")
+    lines(tt,lowerbndp1r_t,col="gray")}
+
+  return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t,"p1rthat"=p1rt_hat))
+}
+
+graphique_coverage <- function(p1rt_theo,p1rt_hat,varp1r.vec,t_eval,J,alpha=0.1,graphique=TRUE){
+ 
+  ## plot of p1rt_theo and confidence intervals
   
-  return (list("lowp1r_t"=lowerbndp1r_t,"uppperp1r_t"=upperbndp1r_t))
+  stdp1rW<- sqrt(var)
+  lowerbndp1r_t <- p1rt_hat -(zalpha*stdp1rW)
+  upperbndp1r_t<- p1rt_hat + (zalpha*stdp1rW)
+  
+  if (graphique==TRUE){
+    upy<-p1rt[J]+0.3
+    plot(tt,upperbndp1r_t, type="l",col="gray",ylim=c(0,upy))
+    lines(tt,p1rt_theo, col="darkgreen")
+    lines(tt,lowerbndp1r_t,col="gray")
+  }
+  
+  count_t <- rep(0,J)
+  for (i in 1:J){
+    if (  between(p1rt_theo[i],lowerbndp1r_t[i],upperbndp1r_t[i]) == TRUE){
+      count_t[i]<- count_t[i] +1
+    }
+  }
+  return(count_t)
 }
 
 # General fonction
@@ -2278,16 +2305,16 @@ matcovNB_alone <- function(X,Z,tt,t_eval,h,graphiques=TRUE){
   return(list_weighed_matcov_NB_t)
 }
 
-  
-# KEEP IN LIKE COMENT UNTIL NB IS DEVELOPED FOR ALL GRIDPOINTS
+# NOT WORKING WELL YET 
 # #############  Matcov Na for all points of the map at the same time ###############
 # ######     i.e modified functions for accepting matrix X and Z as imput     #######
 # ###################################################################################
+# this will allows us to calculate coverage more easily 
 
 #################### matcovP12P13 ######
 
 #################### unweighed matcovNA ######
-matcovNA_t_matrix <- function(p12mat, p13mat,lambda_t.mat,k_t.mat,J,N){
+matcovNA_matrix <- function(p12mat, p13mat,lambda_t.mat,k_t.mat,J,N){
   p14far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(4,J,N))
   p14mat <- p14far.mat$p1r
   p15far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(5,J,N))
@@ -2461,12 +2488,12 @@ matcovNA_alone_matrix <- function(X.mat, Z.mat,tt,t_eval,h){
   
   J <- dim(Zmat)[1]
   Nn <- dim(Zmat)[2]
-  p12p13mat <- P12_P13_estimation(Xmat,Zmat,tt,tt,h=h,kern=dEpan)
+  p12p13mat <- P12_P13_estimation(Xmat,Zmat,tt,t_eval,h=h,kern=dEpan)
   p12mat <- p12p13mat$matp12
   p13mat <- p12p13mat$matp13
   GmZmat <- p12p13mat$matGmZ
   
-  theta_t.mat <-weibullGMM_NonStationaire (GmZmat, tt, tt, h, kern=dEpan, truevalues=NULL)
+  theta_t.mat <-weibullGMM_NonStationaire (GmZmat, tt, t_eval, h, kern=dEpan, truevalues=NULL)
   lambda_t.mat <- theta_t.mat[[1]]
   k_t.mat <- theta_t.mat[[2]]
   p14far.mat <- p1rfarW_temps(lambda_t.mat,k_t.mat,r.mat=matrix(4,J,Nn))
@@ -2554,13 +2581,10 @@ matcovNB_alone_matrix <- function(X.mat, Z.mat,tt,t_eval,h){
   return(matcovNB)
 }
 
-
-
-
-
-
+###############################################################################################
 ##############   Functions that extract lam and k from CMIP simulations        ################
 #############                                                                  ################
+###############################################################################################
 library(dplyr)
 library(stringr)
 traj_from_data <- function(variable.df, grid_points, model.choice, run.choice,var="tmax"){ # tmax or pr
@@ -2729,9 +2753,10 @@ theta_point_traj_from_data <- function(variable.df, grid_points, model.choice, r
   return(list("matrix_lambda"=as.matrix(matlam),"matrix_k"=as.matrix(matk),"matZ"=as.matrix(matz),"matX"=as.matrix(matx)))
 }
 
+################################################################################################
 ##################     Functions allowing us to create maps         ############################
 ##################                                                  ############################
-
+################################################################################################
 p1rfarW_yearT <- function(lam.mat,k.mat,r,indext,lowerbnd=10^(-5)){
   
   ## This function give containing de value of p1rt_hat at each grid point, for a given r and t
