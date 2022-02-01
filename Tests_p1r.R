@@ -1132,7 +1132,6 @@ matlam<-as.matrix(matlam)
 matk<-as.matrix(matk)
 
 library(animation)
-
 saveGIF({
   record <- 100
   for (i in 1:dim(matlam)[1]){
@@ -1181,6 +1180,7 @@ cat("probabilité theorique: ",p1rt[1],"\n")
 simul<-simulWclass_nonStationnary_general(I=size*2,N=1,ksiX=ksix,sigX=sigx,muX=mux,ksiZ=rep(ksiz,size),muZ=NULL,sigZ=sigz,unknown="location", graph=TRUE) 
 Ztraj<-simul$matZ
 Xtraj<-simul$matX
+# Here both are stationary, but it is not necessary
 
 ## Confidence intervals estimation
 ###########################################
@@ -1188,53 +1188,46 @@ Xtraj<-simul$matX
 h_seq <- c(0.03, 0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1)
 err <- CV_error(Xtraj,Ztraj,tt,tt,h_seq,kern= dEpan)
 hopt <- err$optimal_bandwith
+
 # just a visualisation
 p12_hat.vec <- p12_NonPar(Xtraj,Ztraj,tt,tt,hopt)$p12.mat
 plot(tt,p12_hat.vec,type="l")
+
 # covariance matrix of the vector p12that/p13that
-covNA <- matcovNA_alone(Xtraj,Ztraj,tt,tt,hopt,graphiques=TRUE)
-sum(  covNA < 0  )
-covNB <- matcovNB_alone(Xtraj,Ztraj,tt,tt,hopt,graphiques=TRUE)
-sum(  covNB < 0  )
-covN<-covNApr+covNBpr
+covNp12p13 <- matcovp12p13_t(Xtraj,Ztraj,tt,tt,hopt)
+# covNA <- matcovNA_alone(Xtraj,Ztraj,tt,tt,hopt,graphiques=TRUE)
+# sum(  covNA < 0  )
+# covNB <- matcovNB_alone(Xtraj,Ztraj,tt,tt,hopt,graphiques=TRUE)
+# sum(  covNB < 0  )
+# covN<-covNApr+covNBpr
+
 # estimated values of p1rt and it's variance
+r <- 100
 G_emp <- ecdf(Xtraj)
 GmZ <- G_emp(Ztraj)
-variancep1rt<-varp1rfar_t(r,covN, Xtraj, Ztraj, GmZ,tt,tt,hopt)
-plot(variancep1rt$varp1r_t)
+variancep1rt<-varp1rfar_t(r,covNp12p13, Xtraj, Ztraj, GmZ,tt,tt,hopt)
 var <-variancep1rt$varp1r_t
 p1rt_hat <- variancep1rt$p1r_t[,1] 
 plot(var)
 plot(tt,p1rt_hat)
 sum(  var < 0  )
+
 # Construction of confidence intervals
-alpha<- 0.05
-stdp1rW<- sqrt(var)
-zalpha <- qnorm(1-alpha/2)
-lowerbndp1r_t <- p1rt_hat -(zalpha*stdp1rW)
-upperbndp1r_t<- p1rt_hat + (zalpha*stdp1rW)
-upy<-p1rt[size]+0.3
-plot(tt,upperbndp1r_t, type="l",col="gray",ylim=c(0,upy))
-lines(tt,p1rt, col="darkgreen") # theorique
-lines(tt,lowerbndp1r_t,col="gray")
+conf_int <- CI_p1rfar(p1rt_hat,var,tt,J,alpha=0.1,graphique=TRUE)
+
 # to know if the theoretic value is inside the estimated CI
-count_t <- rep(0,size)
-for (i in 1:size){
-  if (p1rt[i]>lowerbndp1r_t[i] & p1rt[i]<upperbndp1r_t[i]){
-    count_t[i]<- count_t[i] +1
-  }
-}
+countvec <- graphique_coverage(p1rt,p1rt_hat,var,tt,J,alpha=0.1,graphique=TRUE)
 
 ################################################################################################
 #### 22. Script for coverage                                                               ####
 ################################################################################################
-
-## We repeat the steps from 21 Num times.For each t 95% of times the theoretic value must be 
+# **** IT WORKS LIKE THAT BUT I AM WORKING ON IT'S OPTIMISATION
+## We estimate the CI Num times:  For each t, 95% of times the theoretic value must be 
 ## inside de confidence interval
 
 ## Number of times we repeat the prodecure
 ###########################################
-Num<- 2
+Num<- 200
 
 ## Paramaters that we chose
 ###########################################
@@ -1256,6 +1249,7 @@ muz <- support + sigz/ksiz
 ###########################################
 size <- 100
 tt <- seq.int(size)/size
+r <- 10
 p1rfar_r <- p1rfarW_temps(rep(lam,size),rep(k,size),matrix(r,ncol=1,nrow=size)) 
 p1rt <- p1rfar_r$p1r
 
@@ -1278,10 +1272,10 @@ for (j in 1:Num){
   X <- as.numeric(Xtraj[,j])
   covNA <- matcovNA_alone(X,Z,tt,tt,hopt,graphiques=FALSE)
   covNB <- matcovNB_alone(X,Z,tt,tt,hopt,graphiques=FALSE)
-  covN<-covNApr+covNBpr
+  covN<-covNA+covNB
   G_emp <- ecdf(X)
   GmZ <- G_emp(Z)
-  variancep1rt<-varp1rfar_t(r,covN, X, Z, GmZ,tt,tt,hopt)
+  variancep1rt<-varp1rfar_t(r,covN, X, Z, GmZ,tt,tt,0.1)
   var <-variancep1rt$varp1r_t
   p1rt_hat <- variancep1rt$p1r_t[,1] 
   stdp1rW<- sqrt(var)
@@ -1294,7 +1288,7 @@ for (j in 1:Num){
     }
   }
 }
-count_t
+count_t # compt combien des fois le p1rt theorique est dedans les intervales estimés
 
 
 
