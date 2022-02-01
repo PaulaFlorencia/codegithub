@@ -1264,7 +1264,7 @@ hopt <- 1 ###
 
 ## CI for each column
 ###########################################
-alpha<- 0.01
+alpha<- 0.1
 zalpha <- qnorm(1-alpha/2)
 
 count_t <- rep(0,size) # coverage counter
