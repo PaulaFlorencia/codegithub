@@ -1,7 +1,7 @@
 #########################  p1r estimation  ######################################
 ######################  ( p_G & p1r* method)  ###################################
 
-# FUNCTIONs AT THE END OF THE SCRIPT 
+# FUNCTIONS AT THE END OF THE SCRIPT 
 # section 1 : data 
 # section 2: parameters estimation
 # section 3: record probability estimation
@@ -39,7 +39,7 @@ data <- simulWclass(m=I,n=J,N=N,ksiX=-0.2,ksiZ=-0.01,sigX=1.2,sigZ=1.5,
 data <- simulWclass(m=I,n=J,N=N,ksiX=-0.8,ksiZ=-0.8,sigX=1,sigZ=1,
                     supportauto=FALSE,muX=0,muZ=1)
 
-data <- simulWclass(m=I,n=J,N=N,ksiX=-1,ksiZ=-1,sigX=1,sigZ=1,
+data <- simulWclass(m=I,n=J,N=N,ksiX=-1,ksiZ=-1,sigX=1,sigZ=1,##
                     supportauto=FALSE,muX=0,muZ=1)
 
 Z <- data$matZ; X <- data$matX
@@ -62,35 +62,58 @@ p_G <- (J-NG)/J
 Zshat <- Z[ Z < x_max]
 # actual size of the subsample
 Nstar <- length(Zshat)
+# G(Z) using theoretic CDF
+matGZ_cdf <- CDF_G(Z, ksi_G, sig_G, mu_G)
+# G(Zs) using theoretic CDF
+matGZs_cdf <- CDF_G(Zs, ksi_G, sig_G, mu_G)
+# G(Z) using empirical CDF
+matGZ_ecdf <- GZestimation(X,Z)
+# G(Zs) using empirical CDF
+matGZs_ecdf <- GZestimation(X,Zs)
+# G(Zshat) using empirical CDF
+matGZshat_ecdf <- GZestimation(X,Zshat)
 # p_Ghat, estimation of p_max = P(Z>x_max)
-matGZ <- GZestimation(X,Z)
-p_Ghat <- p1rfar_NPestim(matGZ,r.vec=rep(I,N))$p1rhat
-# estimated parameters of Ws using the theoretic p_G
-matGZs <- GZestimation(X,Zs)
-thetaWs_pG<-WsGMMestim(matGZs,p_G,truevalues=NULL)
-ksi_F_pG <- thetaWs_pG$xiFhat; ksi_G_pG <- thetaWs_pG$xiGhat; lam_pG <- thetaWs_pG$lambdahat
-# estimated parameters of Ws using the estimator p_Ghat
-matGZshat <- GZestimation(X,Zshat)
-thetaWs_pGhat<-WsGMMestim(matGZshat,p_Ghat,truevalues=NULL)
-ksi_F_pGhat <- thetaWs_pGhat$xiFhat; ksi_G_pGhat <- thetaWs_pGhat$xiGhat; lam_pGhat <- thetaWs_pGhat$lambdahat
+p_Ghat <- (J-Nstar)/J
+# estimated parameters of Ws using CDF of G and the THEORETIC p_G
+thetaWs_pG_cdf <- WsGMMestim(matGZs_cdf,p_G,truevalues=NULL)
+ksi_F_pG_cdf <- thetaWs_pG_cdf$xiFhat; ksi_G_pG_cdf <- thetaWs_pG_cdf$xiGhat; lam_pG_cdf <- thetaWs_pG_cdf$lambdahat
+# estimated parameters of Ws using ECDF of G and the THEORETIC p_G
+thetaWs_pG_ecdf<-WsGMMestim(matGZs_ecdf,p_G,truevalues=NULL)
+ksi_F_pG_ecdf <- thetaWs_pG_ecdf$xiFhat; ksi_G_pG_ecdf <- thetaWs_pG_ecdf$xiGhat; lam_pG_ecdf <- thetaWs_pG_ecdf$lambdahat
+# estimated parameters of Ws using ECDF of G and the ESTIMATOR p_Ghat
+thetaWs_pGhat_ecdf<-WsGMMestim(matGZshat_ecdf,p_Ghat,truevalues=NULL)
+ksi_F_pGhat_ecdf <- thetaWs_pGhat_ecdf$xiFhat; ksi_G_pGhat_ecdf <- thetaWs_pGhat_ecdf$xiGhat; lam_pGhat_ecdf <- thetaWs_pGhat_ecdf$lambdahat
 
 ### 3. p1r estimation ###
 r = 100 # record length choice
 # p1r under Wclass assumption, using theoretic parametersn
 p1rWclass <- p1rfarW(lam,k,r)$p1r
-# estimated parameters of W under Wclass assumption
-Wclassthetahat <- weibullGMMestim(matGZ)
-lamW_hat <- Wclassthetahat$lambdahat; kW_hat <- Wclassthetahat$khat
-# p1r estimation under Wclass assumption
-p1rWclass_hat <- p1rfarW(lamW_hat,kW_hat,r)$p1r
-# p1r estimator using non-parametric method
-p1r_nonpar <- p1rfar_NPestim(matGZ,r.vec=rep(r,N))$p1rhat
-# p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using theoretic p_G
-p1r_starhat_pG <- p1r_star(r, lam_pG, p_G, ksi_G_pG, ksi_F_pG )
-p1r_tildehat_pG <- p_G + (1-p_G)*p1r_starhat_pG
-# p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using estimated p_G
-p1r_starhat_pGhat <- p1r_star(r, lam_pGhat, p_Ghat, ksi_G_pGhat, ksi_F_pGhat )
-p1r_tildehat_pGhat <- p_Ghat + (1-p_Ghat)*p1r_starhat_pGhat
+
+# p1r estimation under WCLASS assumption (using ECDF of G)
+Wclassthetahat_ecdf <- weibullGMMestim(matGZ_ecdf)
+lamW_hat_ecdf <- Wclassthetahat_ecdf$lambdahat; kW_hat_ecdf <- Wclassthetahat_ecdf$khat
+p1rWclass_hat_ecdf <- p1rfarW(lamW_hat_ecdf,kW_hat_ecdf,r)$p1r
+
+# p1r estimation under WCLASS assumption (using CDF of G)
+Wclassthetahat_cdf <- weibullGMMestim(matGZ_cdf)
+lamW_hat_cdf <- Wclassthetahat_cdf$lambdahat; kW_hat_cdf <- Wclassthetahat_cdf$khat
+p1rWclass_hat_cdf <- p1rfarW(lamW_hat_cdf,kW_hat_cdf,r)$p1r
+
+# p1r estimator using non-parametric method (using ecdf of G)
+p1r_nonpar <- p1rfar_NPestim(matGZ_ecdf,r.vec=rep(r,N))$p1rhat
+
+# p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using THEORETIC p_G and CDF of G
+p1r_starhat_pG_cdf <- p1r_star(r, lam_pG_cdf, p_G, ksi_G_pG_cdf, ksi_F_pG_cdf )
+p1r_tildehat_pG_cdf <- p_G + (1-p_G)*p1r_starhat_pG_cdf
+
+# p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using THEORETIC p_G and ECDF of G
+p1r_starhat_pG_ecdf <- p1r_star(r, lam_pG_ecdf, p_G, ksi_G_pG_ecdf, ksi_F_pG_ecdf )
+p1r_tildehat_pG_ecdf <- p_G + (1-p_G)*p1r_starhat_pG_ecdf
+
+# p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using ESTIMATED p_G and ECDF of G
+p1r_starhat_pGhat_ecdf <- p1r_star(r, lam_pGhat_ecdf, p_Ghat, ksi_G_pGhat_ecdf, ksi_F_pGhat_ecdf )
+p1r_tildehat_pGhat_ecdf <- p_Ghat + (1-p_Ghat)*p1r_starhat_pGhat_ecdf
+
 # p1r computed as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using theoretic parameters
 p1r_star_theo <- p1r_star(r, lam, p_G, ksi_G, ksi_F)
 p1r_tilde_theo <- p_G + (1-p_G)*p1r_star_theo
@@ -115,43 +138,67 @@ cat("Theoretical parameters:","\n",
     "\n",
     "W (lam,k) theoretic and estimated parameters under Wclass assumption (we are not in Wclass) :","\n",
     "(theo) lam = ",lam," k = ",k,"\n",
-    " (estimated under Wclass asumption) lamW_hat = ",lamW_hat," k = ", kW_hat, "\n",
+    " (estimated under Wclass asumption using cdf) lamW_hat = ",lamW_hat_cdf," k = ", kW_hat_cdf, "\n",
+    " (estimated under Wclass asumption using ecdf) lamW_hat = ",lamW_hat_ecdf," k = ", kW_hat_ecdf, "\n",
     "\n",
     "Ws (ksi_F,ksi_G,lam) theoretic and estimated parameters :","\n",
     "(theo) ksi_G = ",ksi_G, " ksi_F = ",ksi_F," lam = ", lam,"\n",
-    "(estimated by MMO using p_G) ksi_F_pG = ",ksi_F_pG," ksi_G_pG = ",ksi_G_pG," lam_pG = ",
-    lam_pG,"\n",
+    "(estimated by MMO using p_G and cdf) ksi_F_pG = ",ksi_F_pG_cdf," ksi_G_pG = ",ksi_G_pG_cdf," lam_pG = ",
+    lam_pG_cdf,"\n",
+    "(estimated by MMO using p_G and ecdf) ksi_F_pG = ",ksi_F_pG_ecdf," ksi_G_pG = ",ksi_G_pG_ecdf," lam_pG = ",
+    lam_pG_ecdf,"\n",
     "\n",
-    "(estimated by MMO using p_Ghat) ksi_F_pGhat = ",ksi_F_pGhat," ksi_G_pGhat = ",ksi_G_pGhat,
-    " lam_pGhat = ",lam_pGhat,"\n",
+    "(estimated by MMO using p_Ghat and ecdf) ksi_F_pGhat = ",ksi_F_pGhat_ecdf," ksi_G_pGhat = ",ksi_G_pGhat_ecdf,
+    " lam_pGhat = ",lam_pGhat_ecdf,"\n",
     "\n",
     "p1r computed as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using theoretic parameters","\n",
     "p1r_tilde = ",p1r_tilde_theo, " p1r* = ",p1r_star_theo ,"\n",
     "\n",
     "p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using estimated p_G :","\n",
-    "(p_Ghat) p1r = p1r_tilde_hat = ", p1r_tildehat_pGhat," p1r*_hat = ", p1r_starhat_pGhat, " p_G = ", p_Ghat,"\n",
+    "(p_Ghat & ecdf) p1r = p1r_tilde_hat = ", p1r_tildehat_pGhat_ecdf," p1r*_hat = ", p1r_starhat_pGhat_ecdf, " p_G = ", p_Ghat,"\n",
     "\n",
     "p1r estimated as p1r_tilde ( p1r_tilde = p_G + (1-p_G)*p1rt_star ), using theoretic p_G : ","\n",
-    "(p_G) p1r = p1r_tilde_hat = ", p1r_tildehat_pG," p1r*_hat = ", p1r_starhat_pG, " p_G = ", p_G,"\n",
+    "(p_G & ecdf) p1r = p1r_tilde_hat = ", p1r_tildehat_pG_ecdf," p1r*_hat = ", p1r_starhat_pG_ecdf, " p_G = ", p_G,"\n",
+    "\n",
+    "(p_G & cdf) p1r = p1r_tilde_hat = ", p1r_tildehat_pG_cdf," p1r*_hat = ", p1r_starhat_pG_cdf, " p_G = ", p_G,"\n",
     "\n",
     "p1r estim non-parametric method : ","\n",
     "p1r = p1r_nonpar = ",p1r_nonpar, "\n",
     "\n",
     "p1r estimation under Wclass (we are not in Wclass) : ","\n",
-    "p1r_hat = p1rWclass_hat = ",p1rWclass_hat, "\n",
-    "estimated parameters of W: ","\n",
+    "(ecdf) p1r_hat = p1rWclass_hat = ",p1rWclass_hat_ecdf,"lam = ",lamW_hat_ecdf,"k = " , kW_hat_ecdf,"\n",
+    "(cdf) p1r_hat = p1rWclass_hat = ",p1rWclass_hat_cdf,"lam = ",lamW_hat_cdf,"k = " , kW_hat_cdf, "\n",
     "\n",
-    "p1r under Wclass assumption (we are not in Wclass), using theoretic lam & k : ","\n",
+    "Theoretic p1r under Wclass assumption (we are not in Wclass), using theoretic lam & k : ","\n",
     "p1r = p1rW = ", p1rWclass ,"\n",
     "\n",
-    "Summary of estimations : ","\n",
-    "(p_Ghat) p1r = p1r_tilde_hat = ", p1r_tildehat_pGhat,"\n",
-    "(p_G) p1r = p1r_tilde_hat = ", p1r_tildehat_pG,"\n",
-    "p1r = p1r_nonpar = ",p1r_nonpar, "\n",
-    "p1r_hat = p1rWclass_hat = ",p1rWclass_hat, "\n"
+    "Summary of estimations p1r using cdf: ","\n",
+    "(p_G) p1r = p1r_tilde_hat = ", p1r_tildehat_pG_cdf,"\n",
+    "p1r_hat = p1rWclass_hat = ",p1rWclass_hat_cdf, "(we are not in Wclass) ", "\n",
+    "\n",
+    "Summary of estimations p1r using ecdf: ","\n",
+    "(p_Ghat) p1r_hat = p1r_tilde_hat = ", p1r_tildehat_pGhat_ecdf,"\n",
+    "(p_G) p1r_hat = p1r_tilde_hat = ", p1r_tildehat_pG_ecdf,"\n",
+    "p1r_hat = p1rWclass_hat = ",p1rWclass_hat_ecdf, "(we are not in Wclass) ", "\n",
+    "\n",
+    "Non parametric estimation", "\n",
+    "p1r_hat = p1r_nonpar = ",p1r_nonpar, "\n",
+    "\n",
+    "Theoretic p1r", "\n",
+    "p1r = p1r_tilde = ",p1r_tilde_theo, "\n",
+    "p1r = p1rW = ",p1rWclass, "(we are not in Wclass) ","\n"
+    
     )
 
 ######################  Functions  ##############################################
+# CDF G
+CDF_G <- function(u, xi_G, sig_G, mu_G){
+  stopifnot(xi_G < 0 )
+  s <- (u - mu_G)/sig_G
+  exp ( -( 1+xi_G*s )^(-1/(xi_G))
+        )
+}
+CDF_G_plot <- function(x) CDF_G(x, ksi_G, sig_G, mu_G)
 # density  
 d_Ws <- function(u, lambda, p_G, xi_G, xi_F){
   #stopifnot(xi_G < 0 & xi_F < 0)
@@ -342,7 +389,7 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
   }
   return(list("matX"=matX,
               "matZ"=matZ,
-              "lam"=((sigX/ksiX)/(sigZ/ksiZ))^(1/ksiX),
+              "lam"=((sigZ/ksiZ)/(sigX/ksiX))^(1/ksiX),
               "k"=ksiX/ksiZ,
               "muZ"=muZ,
               "muX"=muX,
