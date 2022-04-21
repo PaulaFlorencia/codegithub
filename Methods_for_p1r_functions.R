@@ -9,9 +9,8 @@ p1rWs_gamma <- function(r, lam, xi_G, xi_F, p_G){ # accepts a vector in r
   delta <- (-log(1-p_G))^(1/a)
   A <-  ( a*b*delta^(a-1) * exp(-(delta^a)) ) / ( (1-p_G)*(lam*m)^b ) 
   B <- ( a*b ) / ( (1-p_G)*(lam*m)^(2*b) )
-  C <- (a-1) * (delta^(a-1)) - a * (delta^(2*a-2)) * exp(-(delta^a))
+  C <- ( (a-1) * (delta^(a-2)) * exp(-(delta^a)) ) - (  a * (delta^(2*a-2)) * exp(-(delta^a)) ) 
   prop2 <- A*gamma(b) + B*C*gamma(2*b)
-  
   return(prop2)
 }
 
