@@ -209,8 +209,71 @@ legend("bottomleft",legend=c("red= theo, blue = p1rWs_hat, green= p1rWs_hat_cdf,
 
 ##########################################################################################################################################
 ##########################################################################################################################################
-##########################################      3. plot p1rW vs p_G   ##########################################################################
+##########################################      4. plot p1rWs vs p_G   ###################################################################
 
-# ...
+
+# 4.1 Theoretical computations ----- PAS VRAIMENT OPERATIONEL
+########################################################################################################################################## 
+r=100
+ksi_G = -0.2; ksi_F = -0.2; sig_G=1; sig_F=1 # On peut changer cette ligne comme on veux 
+pG.vec <- seq(0, 0.3, by=0.01) 
+
+#  pWs for differents p_G
+lam = ((sig_F/ksi_F)/(sig_G/ksi_G))^(1/ksi_G)
+pWs_vs_PG <- rep(0,length(pG.vec))
+for (i in 1:length(pG.vec)){
+  pWs_vs_PG[i] <- p1rWs_class(r, lam, pG.vec[i], ksi_G, ksi_F)$p1rWs
+}
+# plot(pG.vec,pWs_vs_PG,main="pWs vs pG")
+# points(pG.vec,pWs_vs_PG,col="green")
+
+# pW method, with p_G=0 assumtion
+k = ksi_G/ksi_F
+p1rWclass <- p1rfarW(lam,k,r)$p1r 
+p1rWclass_plot <- rep(p1rWclass,length(pG.vec))
+
+plot(pG.vec,p1rWclass_plot,ylim=c(0,1))
+points(pG.vec,pWs_vs_PG,col="red")
+
+points(pG.vec,p1rWclass_plot,col="blue")
+
+# Non-parametric
+J <- 1000; I <- 1000; N <- 1
+pGbar.vec <- 1-pG.vec
+mu_F <- 5 # Sufficiently high muF for mu_G not to be negative
+QuantF <- function(p) mu_F + (sig_F/ksi_F)*(((-log(p))^(-ksi_F))-1)
+x_G.vec <- QuantF(pGbar.vec)
+p1r_nonpar <- rep(0,length(pG.vec))
+mu_G.vec <- rep(0,length(pG.vec))
+for(i in 1:length(x_G.vec)){
+  mu_G.vec[i] <- x_G.vec[i] - sig_G/ksi_G
+  data1 <- simulWclass(m=I,n=J,N=N,ksiX=ksi_G,ksiZ=ksi_F,sigX=sig_G,sigZ=sig_F, 
+                       supportauto=FALSE,muX=mu_G.vec[i],muZ = mu_F, graph=FALSE) 
+  Z1 <- data1$matZ; X1 <- data1$matX 
+  matGZ_ecdf <- GZestimation(X1,Z1)
+  p1r_nonpar[i] <- p1r_NonP(matGZ_ecdf,r)
+}
+# Visualisation
+# plot(pG.vec,p1rWclass_plot,ylim=c(0,1))
+# points(pG.vec,pWs_vs_PG,col="red")
+# points(pG.vec,p1r_nonpar,col="blue")
+
+# 4.2 Comparison between  pWs and pWs_hat in function of p_G
+########################################################################################################################################## 
+
+x_max <- max(X) # Here we no longer know the actual support su we estimate it as max(x)
+Zs_hat <- Z[ Z < x_max]
+Ns_hat <- length(Zs_hat)
+N_G_hat <-J-Ns_hat
+p_G_hat <- (N_G_hat)/J
+cat("p_G_hat = P(Z>x_max) = ", p_G_hat ) 
+matGZs_ecdf <- GZestimation(X,Zs_hat) 
+Wsclass_theta <- WsGMMestim(matGZs_ecdf,p_G_hat,truevalues=NULL) 
+ksiFWs_hat <- Wsclass_theta$xiFhat;
+ksiGWs_hat <- Wsclass_theta$xiGhat; 
+lamWs_hat <- Wsclass_theta$lambdahat
+p1rWsclass_andstar_hat <- p1rWs_class(r, lamWs_hat, p_G_hat, ksiGWs_hat, ksiFWs_hat)
+p1rWsclass_hat <- p1rWsclass_andstar_hat$p1rWs
+p1rstar_hat <- p1rWsclass_andstar_hat$p1rstar
 
 
