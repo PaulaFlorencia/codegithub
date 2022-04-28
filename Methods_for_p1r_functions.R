@@ -1,6 +1,8 @@
 ##########################################################################################################################################
 ##########################################################################################################################################
 library(gmm)
+library(fields)
+library(RColorBrewer)
 #############################################################   Useful functions  ########################################################
 p1rWs_gamma <- function(r, lam, xi_G, xi_F, p_G){ # accepts a vector in r
   a <- abs(1/xi_F)
@@ -72,10 +74,11 @@ p1r_star <- function(r.vec, lam, p_G, xi_G, xi_F){
 }
 
 Ws_integration <- function(r, lambda, p_G, xi_G, xi_F,tol=1e-5){
-  # cat("xi_F= ",xi_F,", xi_G= ",xi_G," lam= ",lambda,"\n")
+  cat("xi_F= ",xi_F,", xi_G= ",xi_G," lam= ",lambda,", pG= ",p_G,"\n")
   I <- integrate(f=p1r_star_integrand, lower=1e-8, upper=Inf,
                  r=r,
                  lambda=lambda,
+                 rel.tol=tol,
                  p_G = p_G,
                  xi_G = xi_G,
                  xi_F = xi_F
@@ -236,9 +239,10 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
          xlim=c(-4,12))
     lines(density(matZ[,1]),col="red")
   }
+  # "lam"=((sigZ/ksiZ)/(sigX/ksiX))^(1/ksiX)
   return(list("matX"=matX,
               "matZ"=matZ,
-              "lam"=((sigZ/ksiZ)/(sigX/ksiX))^(1/ksiX),
+              "lam"=((sigZ/ksiZ)/(sigX/ksiX))^(-1/ksiX),
               "k"=ksiX/ksiZ,
               "muZ"=muZ,
               "muX"=muX,
