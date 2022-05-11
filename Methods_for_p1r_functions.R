@@ -57,6 +57,11 @@ d_Ws <- function(u, lambda, p_G, xi_G, xi_F){
     u^(abs(xi_G) - 1)
 }
 
+Q_Ws <- function(x,lambda, p_G, xi_G, xi_F){
+  delta <- (-log(1 - p_G))^abs(xi_F)
+  (((-log((1-x)*(1-p_G)))^(abs(xi_F)) - delta)^(1/abs(xi_G)))*lambda
+}
+
 p1r_star_integrand <- function(u, r, lambda, p_G, xi_G, xi_F){
   # stopifnot(xi_G < 0 & xi_F < 0)
   stopifnot(r >= 2)
@@ -73,12 +78,13 @@ p1r_star <- function(r.vec, lam, p_G, xi_G, xi_F){
   return(p1rstar.vec)
 }
 
-Ws_integration <- function(r, lambda, p_G, xi_G, xi_F,tol=1e-5){
-  cat("xi_F= ",xi_F,", xi_G= ",xi_G," lam= ",lambda,", pG= ",p_G,"\n")
-  I <- integrate(f=p1r_star_integrand, lower=1e-8, upper=Inf,
+Ws_integration <- function(r, lambda, p_G, xi_G, xi_F,tol=1e-3){
+  cat("xi_F= ",xi_F,", xi_G= ",xi_G," lam= ",lambda,", pG= ",p_G, ", r  = ", r,"\n")
+  I <- integrate(f=p1r_star_integrand, lower=0, upper=Inf,
                  r=r,
                  lambda=lambda,
-                 rel.tol=tol,
+                 #rel.tol=tol,
+                 #subdivisions=10000L,
                  p_G = p_G,
                  xi_G = xi_G,
                  xi_F = xi_F
@@ -86,6 +92,7 @@ Ws_integration <- function(r, lambda, p_G, xi_G, xi_F,tol=1e-5){
   resultat <- I$value
   return(resultat)
 }
+
 
 p1rWs_class <- function(r.vec, lambda, p_G, xi_G, xi_F){
   p1rstar.vec <- p1r_star(r.vec, lambda, p_G, xi_G, xi_F)
@@ -95,7 +102,7 @@ p1rWs_class <- function(r.vec, lambda, p_G, xi_G, xi_F){
 
 # A utilitary function required for the M-estimation in Ws
 auxfunc <- function(theta, vecx, p_G){
-  xiFval = theta[1]; xiGval = theta[2]; lambdaval = theta[3]
+  xiGval = theta[1]; xiFval = theta[2]; lambdaval = theta[3]
   p12val <- p1r_star(r=2, lam=lambdaval, p_G=p_G, xi_G=xiGval, xi_F=xiFval)
   p13val <- p1r_star(r=3, lam=lambdaval, p_G=p_G, xi_G=xiGval, xi_F=xiFval)
   p14val <- p1r_star(r=4, lam=lambdaval, p_G=p_G, xi_G=xiGval, xi_F=xiFval)
@@ -127,11 +134,11 @@ WsGMMestim <- function(matGm,p_G,truevalues=NULL){
                  x=GnhatZ, 
                  t0=startvalues[,j],
                  optfct = "nlminb",
-                 lower=c(-Inf,-Inf,0),upper=c(-1e-10,-1e-10,Inf),
+                 lower=c(-Inf,-Inf,1e-8),upper=c(1e-8,1e-8,Inf),
                  onlyCoefficients = TRUE
     )
-    xiFhat.vec[j] <- EGMMWs$coefficients[[1]] 
-    xiGhat.vec[j] <-EGMMWs$coefficients[[2]] 
+    xiGhat.vec[j] <- EGMMWs$coefficients[[1]] 
+    xiFhat.vec[j] <-EGMMWs$coefficients[[2]] 
     lambdahat.vec[j] <- EGMMWs$coefficients[[3]] 
   }   
   return( list("xiFhat"=xiFhat.vec,"xiGhat"=xiGhat.vec,"lambdahat"=lambdahat.vec,"p_Ghat"=p_G) )
@@ -253,3 +260,127 @@ simulWclass <- function(m,n,N,ksiX,ksiZ,sigX,supportauto=TRUE,muX=0,muZ=0,sigZ=0
   ) 
   )  
 } 
+
+
+
+
+
+
+
+
+
+
+
+# 
+# ########################### int 0 a 1 ######################################
+# ##############################################################################
+# 
+# # density, tranf in -log
+# d_Ws_log <- function(u, lambda, p_G, xi_G, xi_F){
+#   #stopifnot(xi_G < 0 & xi_F < 0)
+#   delta <- (-log(p_G))^abs(xi_F)
+#   abs(xi_G) / (p_G * abs(xi_F) * lambda) *
+#     exp( -((-log(u) / lambda)^abs(xi_G) + delta)^(1/abs(xi_F)) ) *
+#     ((-log(u) / lambda)^abs(xi_G) + delta)^(1/abs(xi_F) - 1) *
+#     (-log(u)/lambda)^(abs(xi_G) - 1)
+# }
+# 
+# # Integrand in p1r_star, transf in log
+# p1r_star_integrand_log <- function(u,r, lambda, p_G, xi_G, xi_F){
+#   #stopifnot(xi_G < 0 & xi_F < 0)
+#   stopifnot(r >= 2)
+#   delta <- (-log(p_G))^abs(xi_F)
+#   u^(-(r-2)) * d_Ws_log(u, lambda = lambda, p_G = p_G, xi_G = xi_G, xi_F = xi_F)
+# }
+# 
+# # p1r_star_integarnd_log_modif <- function(u,r, lambda, p_G, xi_G, xi_F){
+# #   #stopifnot(xi_G < 0 & xi_F < 0)
+# #   delta <- (-log(p_G))^abs(xi_F)
+# #   exp(log(u^(-(r-2)))+log(abs(xi_G) / (p_G * abs(xi_F) * lambda)) +
+# #         ( -((-log(u) / lambda)^abs(xi_G) + delta)^(1/abs(xi_F))  +
+# #             log(((-log(u) / lambda)^abs(xi_G) + delta)^(1/abs(xi_F) - 1)) +
+# #             log((-log(u)/lambda)^(abs(xi_G) - 1))))
+# # }
+# 
+# p1r_star_log <- function(r.vec, lam, p_G, xi_G, xi_F){
+#   m=length(r.vec)
+#   p1rstar.vec=rep(0,m)
+#   for (j in 1:m){
+#     # cat("r  = ", r.vec[j],", ")
+#     p1rstar.vec[j] <- Ws_integration_log(r.vec[j],lam, p_G, xi_G, xi_F)
+#   }  
+#   return(p1rstar.vec)
+# }
+# 
+# Ws_integration_log <- function(r, lambda, p_G, xi_G, xi_F){
+#   p1r_int <- function(u){p1r_star_integrand_log(u, r, lambda, p_G, xi_G, xi_F)}
+#   cat("xi_F= ",xi_F,", xi_G= ",xi_G," lam= ",lambda,", pG= ",p_G, ", r  = ", r,"\n")
+#   I <- quadl(p1r_int, 1e-8, 1)
+#   resultat <- I
+#   return(resultat)
+# }
+# 
+# p1rstar.vec <- p1r_star_log(as.numeric(rvec), lam, p_G, ksi_G, ksi_F)
+# 
+# library(pracma)
+# 
+# 
+# 
+# 
+# 
+# 
+# library(cubature)
+# Ws_integration <- function(r, lambda, p_G, xi_G, xi_F,tol=1e-8){
+#   cat("xi_F= ",xi_F,", xi_G= ",xi_G," lam= ",lambda,", pG= ",p_G, ", r  = ", r,"\n")
+#   I<-cubintegrate(f, 0, Inf, method = "pcubature",
+#                   r=r,
+#                   lambda=lambda,
+#                   p_G = p_G,
+#                   xi_G = xi_G,
+#                   xi_F = xi_F
+#   )
+#   
+#   # I <- integrate(f=p1r_star_integrand, lower=1e-8, upper=Inf,
+#   #                r=r,
+#   #                lambda=lambda,
+#   #                rel.tol=tol,
+#   #                subdivisions=1000L,
+#   #                p_G = p_G,
+#   #                xi_G = xi_G,
+#   #                xi_F = xi_F
+#   # )
+#   resultat <- I$value
+#   return(resultat)
+# }
+# 
+# 
+# 
+# 
+# 
+# ##############################################################################
+# ##############################################################################
+# ##############################################################################
+# ##############################################################################
+# 
+# 
+# ff<-function(g,t) exp((16)*g)*exp(-8*t-(-t-0.01458757)^2/(0.0001126501))
+# 
+# integrate(Vectorize(function(t) integrate(function(g) 
+#   ff(g,t), -2.5,0)$value), -2, 2)
+# 
+# 
+# 
+# d_Ws <- function(u, xi_G){
+#   u^(abs(xi_G) - 1)
+# }
+# 
+# Ws_integration <- function(xi_G,tol=1e-13){
+#   cat("xi_F= ",xi_F,", xi_G= ",xi_G,"lam= ",lambda,", pG= ",p_G, ", r  = ", r,"\n")
+#   I <- integrate(f=d_Ws,1, 1,
+#                  xi_G = xi_G
+#   )
+#   resultat <- I$value
+#   return(resultat)
+# }
+# Ws_integration(-0.2)
+# 
